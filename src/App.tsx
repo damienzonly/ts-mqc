@@ -1,14 +1,15 @@
 import React from "react";
 import mqtt, { MqttClient, IClientOptions } from "mqtt";
-import { message, Input, Spin, Switch, Modal, List, Row, Alert, Col, Button, Tag } from "antd";
+import { message, Input, Spin, Switch, Modal, List, Row, Alert, Col, Button, Tag, Table } from "antd";
 import validator from "validator";
 import "antd/dist/antd.css";
-import { outer_frame, inputStyle } from "./style/app.style";
+import { outer_frame, inputStyle, buttonStyle } from "./style/app.style";
 import { LocalStorage } from "./lib/LocalStorage";
-import { LSKEY_CONNECTIONS, LSKEY_LOCAL_CONF, MQC_MAX_MESSAGES_LENGTH } from "./lib/constants";
-import { IMqcState, Connection_t, Test_t, OutputMessage_t } from "./types/types";
+import { LSKEY_CONNECTIONS, MQC_MAX_MESSAGES_LENGTH } from "./lib/constants";
+import { IMqcState, Connection_t, Test_t, OutputMessage_t, OnChangeInputText } from "./types/App";
 import "font-awesome/css/font-awesome.min.css";
-
+import { CredentialsForm } from "./components/CredentialsForm";
+import { v4 as uuid } from "uuid";
 const ls = new LocalStorage();
 
 export default class App extends React.Component<any, IMqcState> {
@@ -29,10 +30,40 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     private client: MqttClient;
-    private saveInterval: NodeJS.Timeout;
 
+    private clearConnections = () => {
+        ls.set(LSKEY_CONNECTIONS, []);
+        this.setState({ connections: [] });
+    };
+
+    /**
+     * This method will save the following state properties
+     * in the connections key of localstorage:
+     * **hostname**, **brokerPath**, **port**, **protocol**, **topics**, **username**
+     *
+     */
     private saveConf = () => {
-        ls.set(LSKEY_LOCAL_CONF, this.state);
+        const hostname = this.state.hostname;
+        const brokerPath = this.state.brokerPath;
+        const port = this.state.port;
+        const protocol = this.state.protocol;
+        const topics = this.state.topics;
+        const username = this.state.username;
+        if (!hostname || !port || !protocol) return;
+        const connection: Connection_t = { uuid: uuid(), hostname, brokerPath, port, protocol, topics, username };
+        const saved_connections = ls.get(LSKEY_CONNECTIONS);
+        if (saved_connections) {
+            // save only if a similar configuration doesn't exist
+            const similarConnections: Connection_t[] = saved_connections.filter(this.getSimilarConnections);
+            if (!similarConnections.length) {
+                saved_connections.unshift(connection);
+                ls.set(LSKEY_CONNECTIONS, saved_connections);
+                this.setState({ connections: saved_connections });
+            }
+        } else {
+            ls.set(LSKEY_CONNECTIONS, [connection]);
+            this.setState({ connections: [connection] });
+        }
     };
 
     private validateState = () => {
@@ -59,6 +90,8 @@ export default class App extends React.Component<any, IMqcState> {
             this.stopClient();
             this.initializeClient();
             this.setRunning();
+            // save current configuration as a new connection record
+            this.saveConf();
         } catch (e) {
             message.error(e.toString());
             this.unsetRunning();
@@ -78,34 +111,19 @@ export default class App extends React.Component<any, IMqcState> {
         this.setState({ running: false });
     };
 
-    private startAutoSave = () => {
-        this.saveInterval = setInterval(this.saveConf, 1000);
-    };
-
-    private stopAutoSave = () => {
-        if (this.saveInterval !== undefined) {
-            clearInterval(this.saveInterval);
-        }
-    };
+    // todo: settings modal
+    private settingsModal = () => {};
 
     componentDidMount = () => {
-        this.startAutoSave();
         this.stop();
         const connections = ls.get(LSKEY_CONNECTIONS);
         if (connections !== null && Array.isArray(connections) && connections.length) {
             this.setState({ connections });
         }
-
-        const localConf = ls.get(LSKEY_LOCAL_CONF);
-        if (localConf !== null) {
-            this.setState(localConf);
-        }
-        // if conf saved in ls was running: true it must reset
         this.unsetRunning();
     };
 
     componentWillUnmount = () => {
-        this.stopAutoSave();
         this.stop();
     };
 
@@ -150,30 +168,7 @@ export default class App extends React.Component<any, IMqcState> {
         });
     };
 
-    private credentialsForm = () => {
-        return (
-            <>
-                <h3>Username</h3>
-                <Input
-                    style={inputStyle}
-                    disabled={this.state.running}
-                    onChange={this.onChange("username")}
-                    value={this.state.username}
-                    placeholder="Username"
-                />
-                <h3>Password</h3>
-                <Input
-                    style={inputStyle}
-                    disabled={this.state.running}
-                    onChange={this.onChange("password")}
-                    value={this.state.password}
-                    placeholder="Password"
-                />
-            </>
-        );
-    };
-
-    onChange = (prop: string) => e => {
+    onChange: OnChangeInputText = prop => e => {
         const newState = {};
         newState[prop] = e.target.value;
         this.setState(newState);
@@ -298,22 +293,33 @@ export default class App extends React.Component<any, IMqcState> {
         );
     };
 
+    private credentialsForm = () => {
+        return (
+            <CredentialsForm
+                running={this.state.running}
+                onChange={this.onChange}
+                password={this.state.password}
+                username={this.state.username}
+            />
+        );
+    };
+
     private lowerButtons = () => {
-        const commonStyle = { margin: 10, marginLeft: 0 };
         return (
             <>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <div>
-                        <Button style={commonStyle} onClick={this.start} disabled={this.state.running} type={"primary"}>
+                        <Button style={buttonStyle} onClick={this.start} disabled={this.state.running} type={"primary"}>
                             Start
                         </Button>
-                        <Button style={commonStyle} onClick={this.stop} disabled={!this.state.running} type={"danger"}>
+                        <Button style={buttonStyle} onClick={this.stop} disabled={!this.state.running} type={"danger"}>
                             Stop
                         </Button>
+                        {this.state.running ? <Spin style={{ marginLeft: 10 }} /> : null}
                     </div>
                     <div>
                         <Button
-                            style={commonStyle}
+                            style={{ ...buttonStyle, marginRight: 0 }}
                             onClick={this.openTopicsModal}
                             disabled={this.state.topicsModal}
                             type={"primary"}
@@ -354,27 +360,95 @@ export default class App extends React.Component<any, IMqcState> {
         }
     };
 
+    private fallbackNone = (string: string) => {
+        if (string) return string;
+        else return <Tag color={"blue"}>{"<none>"}</Tag>;
+    };
+
+    private getSimilarConnections = (conn: Connection_t) => {
+        return (
+            conn.brokerPath === this.state.brokerPath &&
+            conn.protocol === this.state.protocol &&
+            conn.username === this.state.username &&
+            conn.port === this.state.port
+        );
+    };
+
+    private selectConnection = (connection: Connection_t) => () => {
+        const conns = this.state.connections.filter((conn: Connection_t) => {
+            return connection.uuid === conn.uuid;
+        });
+        if (conns.length !== 0) {
+            const connection: Connection_t = conns[0];
+            this.setState({
+                hostname: connection.hostname,
+                port: connection.port,
+                username: connection.username,
+                credentials: !!connection.username,
+                brokerPath: connection.brokerPath,
+                protocol: connection.protocol,
+                topics: connection.topics
+            });
+        }
+    };
+
+    private deleteConnection = (connection: Connection_t) => () => {
+        debugger;
+        const connections = [...this.state.connections].filter((conn: Connection_t) => {
+            return connection.uuid !== conn.uuid;
+        });
+        this.setState({ connections });
+        ls.set(LSKEY_CONNECTIONS, connections);
+    };
+
     render = () => {
+        const recentConnectionsColumns = [
+            { title: "Hostname", dataIndex: "hostname", render: this.fallbackNone },
+            { title: "Port", dataIndex: "port", render: this.fallbackNone },
+            { title: "Username", dataIndex: "username", render: this.fallbackNone },
+            { title: "Path", dataIndex: "brokerPath", render: this.fallbackNone },
+            {
+                title: "",
+                render: (record: Connection_t) => {
+                    return (
+                        <>
+                            <Button style={buttonStyle} onClick={this.selectConnection(record)} type={"primary"}>
+                                Select
+                            </Button>
+                            <Button style={buttonStyle} onClick={this.deleteConnection(record)} type={"danger"}>
+                                Delete
+                            </Button>
+                        </>
+                    );
+                }
+            }
+        ];
         return (
             <div style={outer_frame}>
                 {this.topicsModal()}
-                <Row gutter={30}>
-                    <Col span={8}>
+                <Row gutter={100}>
+                    <Col flex={2}>
                         <h2> Recent Connections </h2>
-                        {this.state.connections.map((connection: Connection_t) => {
-                            // todo: implement
-                            return null;
-                        })}
+                        <Button style={{ marginBottom: 10 }} type={"primary"} onClick={this.clearConnections}>
+                            Clear
+                        </Button>
+                        <Table
+                            style={{ minWidth: "30%" }}
+                            rowKey={"uuid"}
+                            size={"small"}
+                            columns={recentConnectionsColumns}
+                            dataSource={this.state.connections}
+                        ></Table>
                     </Col>
-                    <Col span={8}>
-                        <h2> MQTT Client </h2>
+                    <Col flex={5}>
+                        <h2> Connection configuration </h2>
                         {this.brokerForm()}
                         <h3> Use Credentials </h3>
                         {this.credentialsSwitch()}
                         {this.state.credentials ? this.credentialsForm() : <div></div>}
                         {this.lowerButtons()}
-                        {this.state.running ? <Spin style={{ margin: 10 }} /> : null}
                     </Col>
+                    <Col flex={5}></Col>
                 </Row>
                 <Row>
                     <List

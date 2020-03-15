@@ -4,7 +4,7 @@ export type OutputMessage_t = {
     ts: number;
 };
 
-type Test_t = {
+export type Test_t = {
     cond: boolean;
     message: string;
 };
@@ -15,6 +15,7 @@ export type Topics_t = {
 };
 
 export type Connection_t = {
+    uuid: string;
     hostname: string;
     port: string;
     username: string;
@@ -22,6 +23,8 @@ export type Connection_t = {
     protocol: string;
     topics: { [key: string]: Topics_t };
 };
+
+export type OnChangeInputText = (field: string) => (e: any) => void;
 
 export interface IMqcState {
     hostname: string;
