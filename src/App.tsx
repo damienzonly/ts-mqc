@@ -1,6 +1,6 @@
 import React from "react";
 import mqtt, { MqttClient, IClientOptions } from "mqtt";
-import { message, Input, Spin, Switch, List, Row, Alert, Col, Button } from "antd";
+import { message, Input, Spin, Switch, Modal, List, Row, Alert, Col, Button, Tag } from "antd";
 import validator from "validator";
 import "antd/dist/antd.css";
 import { outer_frame, inputStyle } from "./style/app.style";
@@ -21,6 +21,7 @@ export default class App extends React.Component<any, IMqcState> {
         password: "",
         protocol: "ws",
         draft_topic: "",
+        topicsModal: false,
         topics: {},
         messages: [],
         running: false,
@@ -124,11 +125,12 @@ export default class App extends React.Component<any, IMqcState> {
         this.client = mqtt.connect(uri, opts);
         this.client
             .on("message", (topic, message) => {
+                // todo: add json flag configuration to avoid parsing when unnecessary
                 const msg = message.toString();
                 let payload;
                 try {
                     const parsed = JSON.parse(msg);
-                    payload = JSON.stringify(parsed, null, 2);
+                    payload = JSON.stringify(parsed, null, 4);
                 } catch (e) {
                     payload = msg;
                 }
@@ -217,7 +219,13 @@ export default class App extends React.Component<any, IMqcState> {
             <Switch
                 disabled={this.state.running}
                 style={{ margin: 10, marginBottom: 20, marginLeft: 0 }}
-                onChange={v => this.setState({ credentials: v })}
+                onChange={v => {
+                    this.setState({
+                        credentials: v,
+                        username: "",
+                        password: ""
+                    });
+                }}
                 checked={this.state.credentials}
             />
         );
@@ -237,7 +245,15 @@ export default class App extends React.Component<any, IMqcState> {
         );
     };
 
-    private topicsForm = () => {
+    private closeTopicsModal = () => {
+        this.setState({ topicsModal: false });
+    };
+
+    private openTopicsModal = () => {
+        this.setState({ topicsModal: true });
+    };
+
+    private topicsModal = () => {
         const topics = Object.keys(this.state.topics);
         const submitFn = () => {
             this.addTopic(this.state.draft_topic);
@@ -245,51 +261,67 @@ export default class App extends React.Component<any, IMqcState> {
         };
         return (
             <>
-                <h3> Add Topics </h3>
-                <Input
-                    value={this.state.draft_topic}
-                    onChange={this.onChange("draft_topic")}
-                    onPressEnter={submitFn}
-                    placeholder={"Type a topic and press enter"}
-                ></Input>
-                <List
-                    style={{ width: "100%" }}
-                    dataSource={topics}
-                    renderItem={(topic: string) => {
-                        return (
-                            <List.Item
-                                key={topic}
-                                style={{ display: "flex", wordBreak: "break-word", justifyContent: "space-between" }}
-                            >
-                                {topic}
-                                {this.removeTopicButton(topic)}
-                            </List.Item>
-                        );
-                    }}
-                ></List>
+                <Modal
+                    title="Topics"
+                    visible={this.state.topicsModal}
+                    onCancel={this.closeTopicsModal}
+                    onOk={this.closeTopicsModal}
+                >
+                    <h3> Add Topics </h3>
+                    <Input
+                        value={this.state.draft_topic}
+                        onChange={this.onChange("draft_topic")}
+                        onPressEnter={submitFn}
+                        placeholder={"Type a topic and press enter"}
+                    ></Input>
+                    <List
+                        style={{ width: "100%" }}
+                        dataSource={topics}
+                        renderItem={(topic: string) => {
+                            return (
+                                <List.Item
+                                    key={topic}
+                                    style={{
+                                        display: "flex",
+                                        wordBreak: "break-word",
+                                        justifyContent: "space-between"
+                                    }}
+                                >
+                                    {<Tag color={"purple"}>{topic}</Tag>}
+                                    {this.removeTopicButton(topic)}
+                                </List.Item>
+                            );
+                        }}
+                    ></List>
+                </Modal>
             </>
         );
     };
 
     private lowerButtons = () => {
+        const commonStyle = { margin: 10, marginLeft: 0 };
         return (
             <>
-                <Button
-                    style={{ margin: 10, marginLeft: 0 }}
-                    onClick={this.start}
-                    disabled={this.state.running}
-                    type={"primary"}
-                >
-                    Start
-                </Button>
-                <Button
-                    style={{ margin: 10, marginLeft: 0 }}
-                    onClick={this.stop}
-                    disabled={!this.state.running}
-                    type={"danger"}
-                >
-                    Stop
-                </Button>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <div>
+                        <Button style={commonStyle} onClick={this.start} disabled={this.state.running} type={"primary"}>
+                            Start
+                        </Button>
+                        <Button style={commonStyle} onClick={this.stop} disabled={!this.state.running} type={"danger"}>
+                            Stop
+                        </Button>
+                    </div>
+                    <div>
+                        <Button
+                            style={commonStyle}
+                            onClick={this.openTopicsModal}
+                            disabled={this.state.topicsModal}
+                            type={"primary"}
+                        >
+                            Add Topics
+                        </Button>
+                    </div>
+                </div>
             </>
         );
     };
@@ -325,6 +357,7 @@ export default class App extends React.Component<any, IMqcState> {
     render = () => {
         return (
             <div style={outer_frame}>
+                {this.topicsModal()}
                 <Row gutter={30}>
                     <Col span={8}>
                         <h2> Recent Connections </h2>
@@ -342,7 +375,6 @@ export default class App extends React.Component<any, IMqcState> {
                         {this.lowerButtons()}
                         {this.state.running ? <Spin style={{ margin: 10 }} /> : null}
                     </Col>
-                    <Col span={8}>{this.topicsForm()}</Col>
                 </Row>
                 <Row>
                     <List
@@ -355,6 +387,7 @@ export default class App extends React.Component<any, IMqcState> {
                                 <List.Item
                                     key={message.payload + i}
                                     style={{
+                                        whiteSpace: "pre-wrap",
                                         display: "flex",
                                         justifyContent: "space-between"
                                     }}

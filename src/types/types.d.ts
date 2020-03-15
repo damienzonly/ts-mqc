@@ -19,7 +19,6 @@ export type Connection_t = {
     port: string;
     username: string;
     brokerPath: string;
-    draft_topic: string;
     protocol: string;
     topics: { [key: string]: Topics_t };
 };
@@ -31,6 +30,7 @@ export interface IMqcState {
     brokerPath: string;
     protocol: string;
     draft_topic: string;
+    topicsModal: boolean;
     credentials: boolean;
     username: string;
     password: string;
