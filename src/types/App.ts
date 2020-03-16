@@ -33,7 +33,9 @@ export interface IMqcState {
     brokerPath: string;
     protocol: string;
     draft_topic: string;
-    topicsModal: boolean;
+    modal_topics: boolean;
+    modal_settings: boolean;
+    modal_create_connection: boolean;
     credentials: boolean;
     username: string;
     password: string;
@@ -41,4 +43,30 @@ export interface IMqcState {
     topics: { [key: string]: Topics_t };
     messages: OutputMessage_t[];
     running: boolean;
+
+    /**
+     * Enable this flag if messages should be parsed as json
+     */
+    settings_parse_messages: boolean;
+
+    /**
+     * Define the maximum number to use for displaying
+     * incoming messages on the list
+     */
+    settings_max_messages: number;
 }
+
+export interface Settings_t {
+    /**
+     * Save this flag for initial setup.
+     * When booting for the first time
+     * the modal will be open
+     */
+    modal_create_connection: boolean;
+    settings_max_messages: number;
+}
+
+export type SelectConnectionMethod = (c: Connection_t, cb?: () => void) => () => void;
+export type DeleteConnectionMethod = (c: Connection_t) => () => void;
+export type AddTopicMethod = (s: string) => void;
+export type RemoveTopicMethod = (s: string) => void;

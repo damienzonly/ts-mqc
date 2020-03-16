@@ -1,15 +1,30 @@
 import React from "react";
-import mqtt, { MqttClient, IClientOptions } from "mqtt";
-import { message, Input, Spin, Switch, Modal, List, Row, Alert, Col, Button, Tag, Table } from "antd";
+import mqtt, { MqttClient, IClientOptions, OnMessageCallback } from "mqtt";
+import { message, Switch, Row, Col, Modal } from "antd";
 import validator from "validator";
 import "antd/dist/antd.css";
-import { outer_frame, inputStyle, buttonStyle } from "./style/app.style";
+import { outer_frame } from "./style/app.style";
 import { LocalStorage } from "./lib/LocalStorage";
-import { LSKEY_CONNECTIONS, MQC_MAX_MESSAGES_LENGTH } from "./lib/constants";
-import { IMqcState, Connection_t, Test_t, OutputMessage_t, OnChangeInputText } from "./types/App";
+import { LSKEY_CONNECTIONS, MQC_MAX_MESSAGES_LENGTH, LSKEY_SETTINGS } from "./lib/constants";
+import {
+    IMqcState,
+    Connection_t,
+    Test_t,
+    OutputMessage_t,
+    OnChangeInputText,
+    DeleteConnectionMethod,
+    SelectConnectionMethod,
+    Settings_t
+} from "./types/App";
 import "font-awesome/css/font-awesome.min.css";
 import { CredentialsForm } from "./components/CredentialsForm";
 import { v4 as uuid } from "uuid";
+import { BrokerForm } from "./components/BrokerForm";
+import { ButtonsBar } from "./components/ButtonsBar";
+import { RecentConnections } from "./components/RecentConnections";
+import { TopicsModal } from "./components/TopicsModal";
+import { OutputDisplay } from "./components/OutputDisplay";
+import { SettingsModal } from "./components/SettingsModal";
 const ls = new LocalStorage();
 // todo: write readme documentation
 export default class App extends React.Component<any, IMqcState> {
@@ -22,35 +37,54 @@ export default class App extends React.Component<any, IMqcState> {
         password: "",
         protocol: "ws",
         draft_topic: "",
-        topicsModal: false,
+        modal_topics: false,
+        modal_settings: false,
+        modal_create_connection: false,
         topics: {},
         messages: [],
         running: false,
-        credentials: false
+        credentials: false,
+        settings_parse_messages: false,
+        settings_max_messages: MQC_MAX_MESSAGES_LENGTH
     };
 
     private client: MqttClient;
 
-    private clearConnections = () => {
-        ls.set(LSKEY_CONNECTIONS, []);
-        this.setState({ connections: [] });
-    };
-
     /**
      * This method will save the following state properties
      * in the connections key of localstorage:
-     * **hostname**, **brokerPath**, **port**, **protocol**, **topics**, **username**
-     *
+     * **hostname**, **brokerPath**, **port**, **protocol**,
+     * **topics**, **username**, **modal_create_connection**
      */
-    private saveConf = () => {
+    private saveAll = () => {
+        // todo: update configuration found if existent and similar to the current
+        this.saveSettings();
+        this.saveConnection();
+    };
+
+    private saveSettings = () => {
+        const settings: Settings_t = {
+            modal_create_connection: this.state.modal_create_connection,
+            settings_max_messages: this.state.settings_max_messages
+        };
+        ls.set(LSKEY_SETTINGS, settings);
+        message.success("Settings Saved");
+    };
+
+    private saveConnection = () => {
         const hostname = this.state.hostname;
-        const brokerPath = this.state.brokerPath;
         const port = this.state.port;
         const protocol = this.state.protocol;
-        const topics = this.state.topics;
-        const username = this.state.username;
         if (!hostname || !port || !protocol) return;
-        const connection: Connection_t = { uuid: uuid(), hostname, brokerPath, port, protocol, topics, username };
+        const connection: Connection_t = {
+            uuid: uuid(),
+            hostname: this.state.hostname,
+            brokerPath: this.state.brokerPath,
+            port: this.state.port,
+            protocol: this.state.protocol,
+            topics: this.state.topics,
+            username: this.state.username
+        };
         const saved_connections = ls.get(LSKEY_CONNECTIONS);
         if (saved_connections) {
             // save only if a similar configuration doesn't exist
@@ -64,6 +98,7 @@ export default class App extends React.Component<any, IMqcState> {
             ls.set(LSKEY_CONNECTIONS, [connection]);
             this.setState({ connections: [connection] });
         }
+        message.success("Connection Saved");
     };
 
     private validateState = () => {
@@ -77,11 +112,9 @@ export default class App extends React.Component<any, IMqcState> {
             }
         ];
 
-        tests.forEach((test: Test_t) => {
-            if (!test.cond) {
-                throw test.message;
-            }
-        });
+        for (const { cond, message } of tests) {
+            if (!cond) throw message;
+        }
     };
 
     start = () => {
@@ -91,7 +124,8 @@ export default class App extends React.Component<any, IMqcState> {
             this.initializeClient();
             this.setRunning();
             // save current configuration as a new connection record
-            this.saveConf();
+            this.saveAll();
+            this.close_modal_createConnection();
         } catch (e) {
             message.error(e.toString());
             this.unsetRunning();
@@ -112,13 +146,36 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     // todo: settings modal
-    private settingsModal = () => {};
+    private modal_settings = () => {
+        return (
+            <SettingsModal
+                saveSettings={this.saveSettings}
+                onMessagesNumberChange={this.onChangeSettingsMaxMessages}
+                messages_number={this.state.settings_max_messages}
+                visible={this.state.modal_settings}
+                onOk={this.close_modal_settings}
+                onCancel={this.close_modal_settings}
+                checked={this.state.settings_parse_messages}
+                onChange={this.onChangeSwitch("settings_parse_messages")}
+            />
+        );
+    };
 
     componentDidMount = () => {
         this.stop();
         const connections = ls.get(LSKEY_CONNECTIONS);
         if (connections !== null && Array.isArray(connections) && connections.length) {
             this.setState({ connections });
+        }
+        const settings: Settings_t = ls.get(LSKEY_SETTINGS);
+        if (settings) {
+            this.setState(settings);
+        } else {
+            const initSettings: Settings_t = {
+                modal_create_connection: this.state.modal_create_connection,
+                settings_max_messages: this.state.settings_max_messages
+            };
+            ls.set(LSKEY_SETTINGS, initSettings);
         }
         this.unsetRunning();
     };
@@ -133,6 +190,30 @@ export default class App extends React.Component<any, IMqcState> {
         }
     };
 
+    /**
+     * Used when the user enables the message parsing
+     * flag in the app settings
+     */
+    private handleJSONMessage: OnMessageCallback = (topic, message, packet) => {
+        const msg = message.toString();
+        let payload;
+        try {
+            const parsed = JSON.parse(msg);
+            payload = JSON.stringify(parsed, null, 4);
+        } catch (e) {
+            payload = msg;
+        }
+        this.addMessage({ topic, payload, ts: Date.now() });
+    };
+
+    /**
+     * Used when the user disables the message parsing
+     * flag in the app settings
+     */
+    private handlePlainMessage: OnMessageCallback = (topic, message) => {
+        this.addMessage({ topic, payload: message.toString(), ts: Date.now() });
+    };
+
     private initializeClient = () => {
         const opts: IClientOptions = {};
         if (this.state.credentials) {
@@ -142,17 +223,13 @@ export default class App extends React.Component<any, IMqcState> {
         const uri = `${this.state.protocol}://${this.state.hostname}:${this.state.port}${this.state.brokerPath}`;
         this.client = mqtt.connect(uri, opts);
         this.client
-            .on("message", (topic, message) => {
+            .on("message", (topic, message, packet) => {
                 // todo: add json flag configuration to avoid parsing when unnecessary
-                const msg = message.toString();
-                let payload;
-                try {
-                    const parsed = JSON.parse(msg);
-                    payload = JSON.stringify(parsed, null, 4);
-                } catch (e) {
-                    payload = msg;
+                if (this.state.settings_parse_messages) {
+                    setImmediate(() => this.handleJSONMessage(topic, message, packet));
+                } else {
+                    setImmediate(() => this.handlePlainMessage(topic, message, packet));
                 }
-                this.addMessage({ topic, payload, ts: Date.now() });
             })
             .on("connect", () => {
                 message.success(`Connected to ${this.state.hostname}`);
@@ -176,37 +253,28 @@ export default class App extends React.Component<any, IMqcState> {
 
     private brokerForm = () => {
         return (
-            <>
-                <h3>Hostname</h3>
-                <Input
-                    style={inputStyle}
-                    disabled={this.state.running}
-                    onChange={this.onChange("hostname")}
-                    value={this.state.hostname}
-                    placeholder="Hostname (e.g. broker.emqx.io)"
-                    // todo: add filtering by host
-                />
-                <h3>Port</h3>
-                <Input
-                    style={inputStyle}
-                    type="number"
-                    disabled={this.state.running}
-                    onChange={this.onChange("port")}
-                    value={this.state.port}
-                    placeholder="Port (e.g. 1883)"
-                    // todo: add filtering by port
-                />
-                <h3>Path</h3>
-                <Input
-                    style={inputStyle}
-                    disabled={this.state.running}
-                    onChange={this.onChange("brokerPath")}
-                    value={this.state.brokerPath}
-                    placeholder="Path (e.g. /mqtt) leave it empty if unnecessary"
-                    // todo: add filtering by port
-                />
-            </>
+            <BrokerForm
+                hostname={this.state.hostname}
+                running={this.state.running}
+                port={this.state.port}
+                brokerPath={this.state.brokerPath}
+                onChange={this.onChange}
+            />
         );
+    };
+
+    private onCredentialsSwitch = v => {
+        this.setState({
+            credentials: v,
+            username: "",
+            password: ""
+        });
+    };
+
+    private onChangeSwitch = (prop: string) => (v: boolean) => {
+        const nextState = {};
+        nextState[prop] = v;
+        this.setState(nextState);
     };
 
     private credentialsSwitch = () => {
@@ -214,82 +282,75 @@ export default class App extends React.Component<any, IMqcState> {
             <Switch
                 disabled={this.state.running}
                 style={{ margin: 10, marginBottom: 20, marginLeft: 0 }}
-                onChange={v => {
-                    this.setState({
-                        credentials: v,
-                        username: "",
-                        password: ""
-                    });
-                }}
+                onChange={this.onCredentialsSwitch}
                 checked={this.state.credentials}
             />
         );
     };
 
-    private removeTopicButton = (topic: string) => {
+    private onChangeSettingsMaxMessages = e => {
+        const valueAsString = e.target.value;
+        const valueAsNumber = Number(valueAsString);
+        this.setState({
+            settings_max_messages: valueAsString,
+            messages: this.state.messages.slice(0, valueAsNumber)
+        });
+    };
+
+    private close_modal_topics = () => {
+        this.setState({ modal_topics: false });
+    };
+
+    private open_modal_topics = () => {
+        this.setState({ modal_topics: true });
+    };
+
+    private close_modal_settings = () => {
+        this.setState({ modal_settings: false });
+    };
+
+    private open_modal_settings = () => {
+        this.setState({ modal_settings: true });
+    };
+
+    private close_modal_createConnection = () => {
+        this.setState({ modal_create_connection: false });
+    };
+
+    private open_modal_createConnection = () => {
+        this.setState({ modal_create_connection: true });
+    };
+
+    private modal_createConnection = () => {
         return (
-            <Button
-                type={"danger"}
-                onClick={() => {
-                    this.removeTopic(topic);
-                }}
-            >
-                <i className="fa fa-plus" />
-                &nbsp; Delete
-            </Button>
+            <>
+                <h2> Connection configuration </h2>
+                {this.brokerForm()}
+                <h3> Use Credentials </h3>
+                {this.credentialsSwitch()}
+                {this.state.credentials ? this.credentialsForm() : <div></div>}
+                {this.buttonsBar()}
+            </>
         );
     };
 
-    private closeTopicsModal = () => {
-        this.setState({ topicsModal: false });
+    private onAddTopic = () => {
+        this.addTopic(this.state.draft_topic);
+        this.setState({ draft_topic: "" });
     };
 
-    private openTopicsModal = () => {
-        this.setState({ topicsModal: true });
-    };
-
-    private topicsModal = () => {
-        const topics = Object.keys(this.state.topics);
-        const submitFn = () => {
-            this.addTopic(this.state.draft_topic);
-            this.setState({ draft_topic: "" });
-        };
+    private modal_topics = () => {
         return (
-            <>
-                <Modal
-                    title="Topics"
-                    visible={this.state.topicsModal}
-                    onCancel={this.closeTopicsModal}
-                    onOk={this.closeTopicsModal}
-                >
-                    <h3> Add Topics </h3>
-                    <Input
-                        value={this.state.draft_topic}
-                        onChange={this.onChange("draft_topic")}
-                        onPressEnter={submitFn}
-                        placeholder={"Type a topic and press enter"}
-                    ></Input>
-                    <List
-                        style={{ width: "100%" }}
-                        dataSource={topics}
-                        renderItem={(topic: string) => {
-                            return (
-                                <List.Item
-                                    key={topic}
-                                    style={{
-                                        display: "flex",
-                                        wordBreak: "break-word",
-                                        justifyContent: "space-between"
-                                    }}
-                                >
-                                    {<Tag color={"purple"}>{topic}</Tag>}
-                                    {this.removeTopicButton(topic)}
-                                </List.Item>
-                            );
-                        }}
-                    ></List>
-                </Modal>
-            </>
+            <TopicsModal
+                submitFn={this.onAddTopic}
+                draft_topic={this.state.draft_topic}
+                addTopic={this.addTopic}
+                removeTopic={this.removeTopic}
+                onChange={this.onChange}
+                closeTopicsModal={this.close_modal_topics}
+                topics={this.state.topics}
+                modal_topics={this.state.modal_topics}
+            />
         );
     };
 
@@ -304,40 +365,23 @@ export default class App extends React.Component<any, IMqcState> {
         );
     };
 
-    private lowerButtons = () => {
+    private buttonsBar = () => {
         return (
-            <>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <div>
-                        <Button style={buttonStyle} onClick={this.start} disabled={this.state.running} type={"primary"}>
-                            Start
-                        </Button>
-                        <Button style={buttonStyle} onClick={this.stop} disabled={!this.state.running} type={"danger"}>
-                            Stop
-                        </Button>
-                        {this.state.running ? <Spin style={{ marginLeft: 10 }} /> : null}
-                    </div>
-                    <div>
-                        <Button
-                            style={{ ...buttonStyle, marginRight: 0 }}
-                            onClick={this.openTopicsModal}
-                            disabled={this.state.topicsModal}
-                            type={"primary"}
-                        >
-                            Add Topics
-                        </Button>
-                    </div>
-                </div>
-            </>
+            <ButtonsBar
+                save={this.saveConnection}
+                open_modal_topics={this.open_modal_topics}
+                open_modal_settings={this.open_modal_settings}
+                running={this.state.running}
+                start={this.start}
+                stop={this.stop}
+                modal_topics={this.state.modal_topics}
+            />
         );
     };
 
     private addMessage = (message: OutputMessage_t) => {
-        const messages: OutputMessage_t[] = [...this.state.messages];
+        const messages: OutputMessage_t[] = [...this.state.messages].slice(0, this.state.settings_max_messages - 1);
         messages.unshift(message);
-        if (messages.length === MQC_MAX_MESSAGES_LENGTH + 1) {
-            messages.pop();
-        }
         this.setState({ messages });
     };
 
@@ -345,7 +389,7 @@ export default class App extends React.Component<any, IMqcState> {
         if (!pattern) return;
         const topics = { ...this.state.topics };
         topics[pattern] = { pattern };
-        this.setState({ topics });
+        this.setState({ topics }, this.saveConnection);
         if (this.client) {
             this.client.subscribe(pattern);
         }
@@ -360,11 +404,6 @@ export default class App extends React.Component<any, IMqcState> {
         }
     };
 
-    private fallbackNone = (string: string) => {
-        if (string) return string;
-        else return <Tag color={"blue"}>{"<none>"}</Tag>;
-    };
-
     private getSimilarConnections = (conn: Connection_t) => {
         return (
             conn.brokerPath === this.state.brokerPath &&
@@ -374,26 +413,28 @@ export default class App extends React.Component<any, IMqcState> {
         );
     };
 
-    private selectConnection = (connection: Connection_t) => () => {
+    private selectConnection: SelectConnectionMethod = (connection, cb) => () => {
         const conns = this.state.connections.filter((conn: Connection_t) => {
             return connection.uuid === conn.uuid;
         });
         if (conns.length !== 0) {
             const connection: Connection_t = conns[0];
-            this.setState({
-                hostname: connection.hostname,
-                port: connection.port,
-                username: connection.username,
-                credentials: !!connection.username,
-                brokerPath: connection.brokerPath,
-                protocol: connection.protocol,
-                topics: connection.topics
-            });
+            this.setState(
+                {
+                    hostname: connection.hostname,
+                    port: connection.port,
+                    username: connection.username,
+                    credentials: !!connection.username,
+                    brokerPath: connection.brokerPath,
+                    protocol: connection.protocol,
+                    topics: connection.topics
+                },
+                cb
+            );
         }
     };
 
-    private deleteConnection = (connection: Connection_t) => () => {
-        debugger;
+    private deleteConnection: DeleteConnectionMethod = connection => () => {
         const connections = [...this.state.connections].filter((conn: Connection_t) => {
             return connection.uuid !== conn.uuid;
         });
@@ -402,77 +443,34 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     render = () => {
-        const recentConnectionsColumns = [
-            { title: "Hostname", dataIndex: "hostname", render: this.fallbackNone },
-            { title: "Port", dataIndex: "port", render: this.fallbackNone },
-            { title: "Username", dataIndex: "username", render: this.fallbackNone },
-            { title: "Path", dataIndex: "brokerPath", render: this.fallbackNone },
-            {
-                title: "",
-                render: (record: Connection_t) => {
-                    return (
-                        <>
-                            <Button style={buttonStyle} onClick={this.selectConnection(record)} type={"primary"}>
-                                Select
-                            </Button>
-                            <Button style={buttonStyle} onClick={this.deleteConnection(record)} type={"danger"}>
-                                Delete
-                            </Button>
-                        </>
-                    );
-                }
-            }
-        ];
         return (
             <div style={outer_frame}>
-                {this.topicsModal()}
-                <Row gutter={100}>
-                    <Col flex={2}>
-                        <h2> Recent Connections </h2>
-                        <Button style={{ marginBottom: 10 }} type={"primary"} onClick={this.clearConnections}>
-                            Clear
-                        </Button>
-                        <Table
-                            style={{ minWidth: "30%" }}
-                            rowKey={"uuid"}
-                            size={"small"}
-                            columns={recentConnectionsColumns}
-                            dataSource={this.state.connections}
-                        ></Table>
+                {this.modal_settings()}
+                {this.modal_topics()}
+                <Modal
+                    onOk={this.close_modal_createConnection}
+                    onCancel={this.close_modal_createConnection}
+                    visible={this.state.modal_create_connection}
+                >
+                    {this.modal_createConnection()}
+                </Modal>
+                <Row gutter={50}>
+                    <Col span={10}>
+                        <RecentConnections
+                            running={this.state.running}
+                            start={this.start}
+                            stop={this.stop}
+                            open_modal_createConnection={this.open_modal_createConnection}
+                            close_modal_createConnection={this.close_modal_createConnection}
+                            open_modal_settings={this.open_modal_settings}
+                            connections={this.state.connections}
+                            deleteConnection={this.deleteConnection}
+                            selectConnection={this.selectConnection}
+                        />
                     </Col>
-                    <Col flex={5}>
-                        <h2> Connection configuration </h2>
-                        {this.brokerForm()}
-                        <h3> Use Credentials </h3>
-                        {this.credentialsSwitch()}
-                        {this.state.credentials ? this.credentialsForm() : <div></div>}
-                        {this.lowerButtons()}
+                    <Col span={14}>
+                        <OutputDisplay running={this.state.running} messages={this.state.messages} />
                     </Col>
-                    <Col flex={5}></Col>
-                </Row>
-                <Row>
-                    <List
-                        style={{
-                            width: "100%"
-                        }}
-                        dataSource={this.state.messages}
-                        renderItem={(message: OutputMessage_t, i) => {
-                            return (
-                                <List.Item
-                                    key={message.payload + i}
-                                    style={{
-                                        whiteSpace: "pre-wrap",
-                                        display: "flex",
-                                        justifyContent: "space-between"
-                                    }}
-                                >
-                                    <Alert type={"info"} message={new Date(message.ts).toISOString()} />
-                                    <Alert type={"success"} message={message.topic} />
-                                    <Alert type={"error"} message={message.payload} />
-                                </List.Item>
-                            );
-                        }}
-                    ></List>
                 </Row>
             </div>
         );
