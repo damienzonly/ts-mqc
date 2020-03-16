@@ -12,7 +12,7 @@ export class OutputDisplay extends React.Component<OutputDisplayProps> {
     render() {
         return (
             <Table
-                showHeader={false}
+                showHeader={this.props.running}
                 dataSource={this.props.messages}
                 pagination={false}
                 rowKey={"ts"}

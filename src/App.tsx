@@ -454,8 +454,8 @@ export default class App extends React.Component<any, IMqcState> {
                 >
                     {this.modal_createConnection()}
                 </Modal>
-                <Row gutter={100}>
-                    <Col span={8}>
+                <Row gutter={50}>
+                    <Col span={10}>
                         <RecentConnections
                             running={this.state.running}
                             start={this.start}
@@ -468,7 +468,7 @@ export default class App extends React.Component<any, IMqcState> {
                             selectConnection={this.selectConnection}
                         />
                     </Col>
-                    <Col span={16}>
+                    <Col span={14}>
                         <OutputDisplay running={this.state.running} messages={this.state.messages} />
                     </Col>
                 </Row>

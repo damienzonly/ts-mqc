@@ -25,20 +25,25 @@ export class RecentConnections extends React.Component<RecentConnectionsProps> {
             { title: "Username", dataIndex: "username", render: fallbackNone },
             { title: "Path", dataIndex: "brokerPath", render: fallbackNone },
             {
-                title: "",
                 render: (record: Connection_t) => {
                     return (
                         <>
                             <Button
                                 disabled={this.props.running}
-                                style={buttonStyle}
                                 onClick={this.props.selectConnection(record, this.props.start)}
                                 type={"primary"}
                             >
                                 <i className={"fa fa-play"} />
                             </Button>
+                        </>
+                    );
+                }
+            },
+            {
+                render: record => {
+                    return (
+                        <>
                             <Button
-                                style={buttonStyle}
                                 onClick={() => {
                                     this.props.selectConnection(record)();
                                     this.props.open_modal_createConnection();
@@ -47,10 +52,16 @@ export class RecentConnections extends React.Component<RecentConnectionsProps> {
                             >
                                 <i className={"fa fa-edit"} />
                             </Button>
-                            <Button style={buttonStyle} onClick={this.props.deleteConnection(record)} type={"danger"}>
-                                <i className="fa fa-trash" />
-                            </Button>
                         </>
+                    );
+                }
+            },
+            {
+                render: record => {
+                    return (
+                        <Button onClick={this.props.deleteConnection(record)} type={"danger"}>
+                            <i className="fa fa-trash" />
+                        </Button>
                     );
                 }
             }

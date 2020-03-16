@@ -5,7 +5,14 @@ const path = require("path");
 const isDev = require("electron-is-dev");
 let mainWindow;
 function createWindow() {
-    mainWindow = new BrowserWindow({ width: 2000, height: 1000 });
+    const w = 1400;
+    const h = 800;
+    mainWindow = new BrowserWindow({
+        minWidth: w,
+        minHeight: h,
+        width: w,
+        height: h
+    });
     mainWindow.loadURL(isDev ? "http://localhost:3000" : `file://${path.join(__dirname, "../build/index.html")}`);
     mainWindow.on("closed", () => (mainWindow = null));
 }
