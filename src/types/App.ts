@@ -33,7 +33,8 @@ export interface IMqcState {
     brokerPath: string;
     protocol: string;
     draft_topic: string;
-    topicsModal: boolean;
+    modal_topics: boolean;
+    modal_settings: boolean;
     credentials: boolean;
     username: string;
     password: string;
@@ -41,6 +42,11 @@ export interface IMqcState {
     topics: { [key: string]: Topics_t };
     messages: OutputMessage_t[];
     running: boolean;
+
+    /**
+     * Enable this flag if messages should be parsed as json
+     */
+    settings_parse_messages: boolean;
 }
 
 export type SelectConnectionMethod = (c: Connection_t) => () => void;

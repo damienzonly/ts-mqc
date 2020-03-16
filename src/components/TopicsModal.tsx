@@ -4,11 +4,12 @@ import "antd/dist/antd.css";
 import { OnChangeInputText, Topics_t, AddTopicMethod, RemoveTopicMethod } from "../types/App";
 
 export interface TopicsModalProps {
-    topicsModal: boolean;
+    modal_topics: boolean;
     draft_topic: string;
     topics: { [key: string]: Topics_t };
     addTopic: AddTopicMethod;
     removeTopic: RemoveTopicMethod;
+    // todo: rename onOk and onCancel methods
     closeTopicsModal: () => void;
     onChange: OnChangeInputText;
 }
@@ -23,7 +24,7 @@ export class TopicsModal extends React.Component<TopicsModalProps> {
         return (
             <Modal
                 title="Topics"
-                visible={this.props.topicsModal}
+                visible={this.props.modal_topics}
                 onCancel={this.props.closeTopicsModal}
                 onOk={this.props.closeTopicsModal}
             >

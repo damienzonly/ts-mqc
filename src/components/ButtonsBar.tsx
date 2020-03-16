@@ -7,8 +7,9 @@ export interface ButtonsBarProps {
     running: boolean;
     start: () => void;
     stop: () => void;
-    openTopicsModal: () => void;
-    topicsModal: boolean;
+    open_modal_topics: () => void;
+    open_modal_settings: () => void;
+    modal_topics: boolean;
 }
 
 export class ButtonsBar extends React.Component<ButtonsBarProps> {
@@ -35,10 +36,13 @@ export class ButtonsBar extends React.Component<ButtonsBarProps> {
                     {this.props.running ? <Spin style={{ marginLeft: 10 }} /> : null}
                 </div>
                 <div>
+                    <Button style={buttonStyle} onClick={this.props.open_modal_settings} type={"primary"}>
+                        Settings
+                    </Button>
                     <Button
                         style={{ ...buttonStyle, marginRight: 0 }}
-                        onClick={this.props.openTopicsModal}
-                        disabled={this.props.topicsModal}
+                        onClick={this.props.open_modal_topics}
+                        disabled={this.props.modal_topics}
                         type={"primary"}
                     >
                         Add Topics

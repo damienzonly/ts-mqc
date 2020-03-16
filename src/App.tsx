@@ -23,6 +23,7 @@ import { ButtonsBar } from "./components/ButtonsBar";
 import { RecentConnections } from "./components/RecentConnections";
 import { TopicsModal } from "./components/TopicsModal";
 import { OutputDisplay } from "./components/OuputDisplay";
+import { SettingsModal } from "./components/SettingsModal";
 const ls = new LocalStorage();
 // todo: write readme documentation
 export default class App extends React.Component<any, IMqcState> {
@@ -35,11 +36,13 @@ export default class App extends React.Component<any, IMqcState> {
         password: "",
         protocol: "ws",
         draft_topic: "",
-        topicsModal: false,
+        modal_topics: false,
+        modal_settings: false,
         topics: {},
         messages: [],
         running: false,
-        credentials: false
+        credentials: false,
+        settings_parse_messages: false
     };
 
     private client: MqttClient;
@@ -127,7 +130,17 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     // todo: settings modal
-    private settingsModal = () => {};
+    private modal_settings = () => {
+        return (
+            <SettingsModal
+                visible={this.state.modal_settings}
+                onOk={this.close_modal_settings}
+                onCancel={this.close_modal_settings}
+                checked={this.state.settings_parse_messages}
+                onChange={this.onChangeSwitch("settings_parse_messages")}
+            />
+        );
+    };
 
     componentDidMount = () => {
         this.stop();
@@ -152,7 +165,7 @@ export default class App extends React.Component<any, IMqcState> {
      * Used when the user enables the message parsing
      * flag in the app settings
      */
-    private handleJSONMessage: OnMessageCallback = (topic, message) => {
+    private handleJSONMessage: OnMessageCallback = (topic, message, packet) => {
         const msg = message.toString();
         let payload;
         try {
@@ -181,22 +194,13 @@ export default class App extends React.Component<any, IMqcState> {
         const uri = `${this.state.protocol}://${this.state.hostname}:${this.state.port}${this.state.brokerPath}`;
         this.client = mqtt.connect(uri, opts);
         this.client
-            .on("message", (topic, message) => {
+            .on("message", (topic, message, packet) => {
                 // todo: add json flag configuration to avoid parsing when unnecessary
-                // if (this.state.jsonparseflag) {
-                //     setImmediate(() => this.handleJSONMessage(topic, message));
-                // } else {
-                //     setImmediate(() => this.handlePlainMessage(topic, message));
-                // }
-                const msg = message.toString();
-                let payload;
-                try {
-                    const parsed = JSON.parse(msg);
-                    payload = JSON.stringify(parsed, null, 4);
-                } catch (e) {
-                    payload = msg;
+                if (this.state.settings_parse_messages) {
+                    setImmediate(() => this.handleJSONMessage(topic, message, packet));
+                } else {
+                    setImmediate(() => this.handlePlainMessage(topic, message, packet));
                 }
-                this.addMessage({ topic, payload, ts: Date.now() });
             })
             .on("connect", () => {
                 message.success(`Connected to ${this.state.hostname}`);
@@ -238,6 +242,12 @@ export default class App extends React.Component<any, IMqcState> {
         });
     };
 
+    private onChangeSwitch = (prop: string) => (v: boolean) => {
+        const nextState = {};
+        nextState[prop] = v;
+        this.setState(nextState);
+    };
+
     private credentialsSwitch = () => {
         return (
             <Switch
@@ -249,24 +259,32 @@ export default class App extends React.Component<any, IMqcState> {
         );
     };
 
-    private closeTopicsModal = () => {
-        this.setState({ topicsModal: false });
+    private close_modal_topics = () => {
+        this.setState({ modal_topics: false });
     };
 
-    private openTopicsModal = () => {
-        this.setState({ topicsModal: true });
+    private open_modal_topics = () => {
+        this.setState({ modal_topics: true });
     };
 
-    private topicsModal = () => {
+    private close_modal_settings = () => {
+        this.setState({ modal_settings: false });
+    };
+
+    private open_modal_settings = () => {
+        this.setState({ modal_settings: true });
+    };
+
+    private modal_topics = () => {
         return (
             <TopicsModal
                 draft_topic={this.state.draft_topic}
                 addTopic={this.addTopic}
                 removeTopic={this.removeTopic}
                 onChange={this.onChange}
-                closeTopicsModal={this.closeTopicsModal}
+                closeTopicsModal={this.close_modal_topics}
                 topics={this.state.topics}
-                topicsModal={this.state.topicsModal}
+                modal_topics={this.state.modal_topics}
             />
         );
     };
@@ -285,11 +303,12 @@ export default class App extends React.Component<any, IMqcState> {
     private buttonsBar = () => {
         return (
             <ButtonsBar
-                openTopicsModal={this.openTopicsModal}
+                open_modal_topics={this.open_modal_topics}
+                open_modal_settings={this.open_modal_settings}
                 running={this.state.running}
                 start={this.start}
                 stop={this.stop}
-                topicsModal={this.state.topicsModal}
+                modal_topics={this.state.modal_topics}
             />
         );
     };
@@ -360,7 +379,8 @@ export default class App extends React.Component<any, IMqcState> {
     render = () => {
         return (
             <div style={outer_frame}>
-                {this.topicsModal()}
+                {this.modal_settings()}
+                {this.modal_topics()}
                 <Row gutter={100}>
                     <Col flex={2}>
                         <RecentConnections
