@@ -8,6 +8,7 @@ export interface TopicsModalProps {
     draft_topic: string;
     topics: { [key: string]: Topics_t };
     addTopic: AddTopicMethod;
+    submitFn: () => void;
     removeTopic: RemoveTopicMethod;
     // todo: rename onOk and onCancel methods
     closeTopicsModal: () => void;
@@ -17,10 +18,6 @@ export interface TopicsModalProps {
 export class TopicsModal extends React.Component<TopicsModalProps> {
     render() {
         const topics = Object.keys(this.props.topics);
-        const submitFn = () => {
-            this.props.addTopic(this.props.draft_topic);
-            this.setState({ draft_topic: "" });
-        };
         return (
             <Modal
                 title="Topics"
@@ -32,7 +29,7 @@ export class TopicsModal extends React.Component<TopicsModalProps> {
                 <Input
                     value={this.props.draft_topic}
                     onChange={this.props.onChange("draft_topic")}
-                    onPressEnter={submitFn}
+                    onPressEnter={this.props.submitFn}
                     placeholder={"Type a topic and press enter"}
                 ></Input>
                 <List

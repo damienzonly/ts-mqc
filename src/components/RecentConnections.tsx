@@ -1,6 +1,6 @@
 import React from "react";
 import { Connection_t, SelectConnectionMethod, DeleteConnectionMethod } from "../types/App";
-import { Button, Table } from "antd";
+import { Button, Table, Spin } from "antd";
 import "antd/dist/antd.css";
 import { buttonStyle } from "../style/app.style";
 import { fallbackNone } from "../lib/utils";
@@ -8,8 +8,13 @@ import { fallbackNone } from "../lib/utils";
 export interface RecentConnectionsProps {
     selectConnection: SelectConnectionMethod;
     deleteConnection: DeleteConnectionMethod;
+    open_modal_settings: () => void;
+    open_modal_createConnection: () => void;
+    close_modal_createConnection: () => void;
+    start: () => void;
+    stop: () => void;
     connections: Connection_t[];
-    clearConnections: () => void;
+    running: boolean;
 }
 
 export class RecentConnections extends React.Component<RecentConnectionsProps> {
@@ -24,11 +29,26 @@ export class RecentConnections extends React.Component<RecentConnectionsProps> {
                 render: (record: Connection_t) => {
                     return (
                         <>
-                            <Button style={buttonStyle} onClick={this.props.selectConnection(record)} type={"primary"}>
-                                Select
+                            <Button
+                                disabled={this.props.running}
+                                style={buttonStyle}
+                                onClick={this.props.selectConnection(record, this.props.start)}
+                                type={"primary"}
+                            >
+                                <i className={"fa fa-play"} />
+                            </Button>
+                            <Button
+                                style={buttonStyle}
+                                onClick={() => {
+                                    this.props.selectConnection(record)();
+                                    this.props.open_modal_createConnection();
+                                }}
+                                type={"primary"}
+                            >
+                                <i className={"fa fa-edit"} />
                             </Button>
                             <Button style={buttonStyle} onClick={this.props.deleteConnection(record)} type={"danger"}>
-                                Delete
+                                <i className="fa fa-trash" />
                             </Button>
                         </>
                     );
@@ -38,11 +58,31 @@ export class RecentConnections extends React.Component<RecentConnectionsProps> {
         return (
             <>
                 <h2> Recent Connections </h2>
-                <Button style={{ marginBottom: 10 }} type={"primary"} onClick={this.props.clearConnections}>
-                    Clear
-                </Button>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <div>
+                        <Button style={buttonStyle} onClick={this.props.open_modal_createConnection} type={"primary"}>
+                            <i className={"fa fa-edit"} />
+                            &nbsp; Connection
+                        </Button>
+                        {this.props.running ? (
+                            <Button type={"danger"} onClick={this.props.stop}>
+                                Stop
+                            </Button>
+                        ) : null}
+                        {this.props.running ? <Spin style={{ marginLeft: 10 }} /> : null}
+                    </div>
+                    <div>
+                        <Button
+                            style={{ ...buttonStyle, marginRight: 0 }}
+                            onClick={this.props.open_modal_settings}
+                            type={"primary"}
+                        >
+                            <i className={"fa fa-gears"} />
+                            &nbsp; Settings
+                        </Button>
+                    </div>
+                </div>
                 <Table
-                    style={{ minWidth: "30%" }}
                     rowKey={"uuid"}
                     size={"small"}
                     columns={recentConnectionsColumns}

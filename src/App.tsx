@@ -1,11 +1,11 @@
 import React from "react";
 import mqtt, { MqttClient, IClientOptions, OnMessageCallback } from "mqtt";
-import { message, Switch, Row, Col } from "antd";
+import { message, Switch, Row, Col, Modal } from "antd";
 import validator from "validator";
 import "antd/dist/antd.css";
 import { outer_frame } from "./style/app.style";
 import { LocalStorage } from "./lib/LocalStorage";
-import { LSKEY_CONNECTIONS, MQC_MAX_MESSAGES_LENGTH } from "./lib/constants";
+import { LSKEY_CONNECTIONS, MQC_MAX_MESSAGES_LENGTH, LSKEY_SETTINGS } from "./lib/constants";
 import {
     IMqcState,
     Connection_t,
@@ -13,7 +13,8 @@ import {
     OutputMessage_t,
     OnChangeInputText,
     DeleteConnectionMethod,
-    SelectConnectionMethod
+    SelectConnectionMethod,
+    Settings_t
 } from "./types/App";
 import "font-awesome/css/font-awesome.min.css";
 import { CredentialsForm } from "./components/CredentialsForm";
@@ -22,7 +23,7 @@ import { BrokerForm } from "./components/BrokerForm";
 import { ButtonsBar } from "./components/ButtonsBar";
 import { RecentConnections } from "./components/RecentConnections";
 import { TopicsModal } from "./components/TopicsModal";
-import { OutputDisplay } from "./components/OuputDisplay";
+import { OutputDisplay } from "./components/OutputDisplay";
 import { SettingsModal } from "./components/SettingsModal";
 const ls = new LocalStorage();
 // todo: write readme documentation
@@ -38,26 +39,39 @@ export default class App extends React.Component<any, IMqcState> {
         draft_topic: "",
         modal_topics: false,
         modal_settings: false,
+        modal_create_connection: false,
         topics: {},
         messages: [],
         running: false,
         credentials: false,
-        settings_parse_messages: false
+        settings_parse_messages: false,
+        settings_max_messages: MQC_MAX_MESSAGES_LENGTH
     };
 
     private client: MqttClient;
 
-    private clearConnections = () => {
-        ls.set(LSKEY_CONNECTIONS, []);
-        this.setState({ connections: [] });
-    };
-
     /**
      * This method will save the following state properties
      * in the connections key of localstorage:
-     * **hostname**, **brokerPath**, **port**, **protocol**, **topics**, **username**
+     * **hostname**, **brokerPath**, **port**, **protocol**,
+     * **topics**, **username**, **modal_create_connection**
      */
-    private saveConf = () => {
+    private saveAll = () => {
+        // todo: update configuration found if existent and similar to the current
+        this.saveSettings();
+        this.saveConnection();
+    };
+
+    private saveSettings = () => {
+        const settings: Settings_t = {
+            modal_create_connection: this.state.modal_create_connection,
+            settings_max_messages: this.state.settings_max_messages
+        };
+        ls.set(LSKEY_SETTINGS, settings);
+        message.success("Settings Saved");
+    };
+
+    private saveConnection = () => {
         const hostname = this.state.hostname;
         const port = this.state.port;
         const protocol = this.state.protocol;
@@ -84,6 +98,7 @@ export default class App extends React.Component<any, IMqcState> {
             ls.set(LSKEY_CONNECTIONS, [connection]);
             this.setState({ connections: [connection] });
         }
+        message.success("Connection Saved");
     };
 
     private validateState = () => {
@@ -109,7 +124,8 @@ export default class App extends React.Component<any, IMqcState> {
             this.initializeClient();
             this.setRunning();
             // save current configuration as a new connection record
-            this.saveConf();
+            this.saveAll();
+            this.close_modal_createConnection();
         } catch (e) {
             message.error(e.toString());
             this.unsetRunning();
@@ -133,6 +149,9 @@ export default class App extends React.Component<any, IMqcState> {
     private modal_settings = () => {
         return (
             <SettingsModal
+                saveSettings={this.saveSettings}
+                onMessagesNumberChange={this.onChangeSettingsMaxMessages}
+                messages_number={this.state.settings_max_messages}
                 visible={this.state.modal_settings}
                 onOk={this.close_modal_settings}
                 onCancel={this.close_modal_settings}
@@ -147,6 +166,16 @@ export default class App extends React.Component<any, IMqcState> {
         const connections = ls.get(LSKEY_CONNECTIONS);
         if (connections !== null && Array.isArray(connections) && connections.length) {
             this.setState({ connections });
+        }
+        const settings: Settings_t = ls.get(LSKEY_SETTINGS);
+        if (settings) {
+            this.setState(settings);
+        } else {
+            const initSettings: Settings_t = {
+                modal_create_connection: this.state.modal_create_connection,
+                settings_max_messages: this.state.settings_max_messages
+            };
+            ls.set(LSKEY_SETTINGS, initSettings);
         }
         this.unsetRunning();
     };
@@ -259,6 +288,15 @@ export default class App extends React.Component<any, IMqcState> {
         );
     };
 
+    private onChangeSettingsMaxMessages = e => {
+        const valueAsString = e.target.value;
+        const valueAsNumber = Number(valueAsString);
+        this.setState({
+            settings_max_messages: valueAsString,
+            messages: this.state.messages.slice(0, valueAsNumber)
+        });
+    };
+
     private close_modal_topics = () => {
         this.setState({ modal_topics: false });
     };
@@ -275,9 +313,36 @@ export default class App extends React.Component<any, IMqcState> {
         this.setState({ modal_settings: true });
     };
 
+    private close_modal_createConnection = () => {
+        this.setState({ modal_create_connection: false });
+    };
+
+    private open_modal_createConnection = () => {
+        this.setState({ modal_create_connection: true });
+    };
+
+    private modal_createConnection = () => {
+        return (
+            <>
+                <h2> Connection configuration </h2>
+                {this.brokerForm()}
+                <h3> Use Credentials </h3>
+                {this.credentialsSwitch()}
+                {this.state.credentials ? this.credentialsForm() : <div></div>}
+                {this.buttonsBar()}
+            </>
+        );
+    };
+
+    private onAddTopic = () => {
+        this.addTopic(this.state.draft_topic);
+        this.setState({ draft_topic: "" });
+    };
+
     private modal_topics = () => {
         return (
             <TopicsModal
+                submitFn={this.onAddTopic}
                 draft_topic={this.state.draft_topic}
                 addTopic={this.addTopic}
                 removeTopic={this.removeTopic}
@@ -303,6 +368,7 @@ export default class App extends React.Component<any, IMqcState> {
     private buttonsBar = () => {
         return (
             <ButtonsBar
+                save={this.saveConnection}
                 open_modal_topics={this.open_modal_topics}
                 open_modal_settings={this.open_modal_settings}
                 running={this.state.running}
@@ -314,11 +380,8 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     private addMessage = (message: OutputMessage_t) => {
-        const messages: OutputMessage_t[] = [...this.state.messages];
+        const messages: OutputMessage_t[] = [...this.state.messages].slice(0, this.state.settings_max_messages - 1);
         messages.unshift(message);
-        if (messages.length === MQC_MAX_MESSAGES_LENGTH + 1) {
-            messages.pop();
-        }
         this.setState({ messages });
     };
 
@@ -326,7 +389,7 @@ export default class App extends React.Component<any, IMqcState> {
         if (!pattern) return;
         const topics = { ...this.state.topics };
         topics[pattern] = { pattern };
-        this.setState({ topics });
+        this.setState({ topics }, this.saveConnection);
         if (this.client) {
             this.client.subscribe(pattern);
         }
@@ -350,21 +413,24 @@ export default class App extends React.Component<any, IMqcState> {
         );
     };
 
-    private selectConnection: SelectConnectionMethod = connection => () => {
+    private selectConnection: SelectConnectionMethod = (connection, cb) => () => {
         const conns = this.state.connections.filter((conn: Connection_t) => {
             return connection.uuid === conn.uuid;
         });
         if (conns.length !== 0) {
             const connection: Connection_t = conns[0];
-            this.setState({
-                hostname: connection.hostname,
-                port: connection.port,
-                username: connection.username,
-                credentials: !!connection.username,
-                brokerPath: connection.brokerPath,
-                protocol: connection.protocol,
-                topics: connection.topics
-            });
+            this.setState(
+                {
+                    hostname: connection.hostname,
+                    port: connection.port,
+                    username: connection.username,
+                    credentials: !!connection.username,
+                    brokerPath: connection.brokerPath,
+                    protocol: connection.protocol,
+                    topics: connection.topics
+                },
+                cb
+            );
         }
     };
 
@@ -381,27 +447,30 @@ export default class App extends React.Component<any, IMqcState> {
             <div style={outer_frame}>
                 {this.modal_settings()}
                 {this.modal_topics()}
+                <Modal
+                    onOk={this.close_modal_createConnection}
+                    onCancel={this.close_modal_createConnection}
+                    visible={this.state.modal_create_connection}
+                >
+                    {this.modal_createConnection()}
+                </Modal>
                 <Row gutter={100}>
-                    <Col flex={2}>
+                    <Col span={8}>
                         <RecentConnections
-                            clearConnections={this.clearConnections}
+                            running={this.state.running}
+                            start={this.start}
+                            stop={this.stop}
+                            open_modal_createConnection={this.open_modal_createConnection}
+                            close_modal_createConnection={this.close_modal_createConnection}
+                            open_modal_settings={this.open_modal_settings}
                             connections={this.state.connections}
                             deleteConnection={this.deleteConnection}
                             selectConnection={this.selectConnection}
                         />
                     </Col>
-                    <Col flex={5}>
-                        <h2> Connection configuration </h2>
-                        {this.brokerForm()}
-                        <h3> Use Credentials </h3>
-                        {this.credentialsSwitch()}
-                        {this.state.credentials ? this.credentialsForm() : <div></div>}
-                        {this.buttonsBar()}
+                    <Col span={16}>
+                        <OutputDisplay running={this.state.running} messages={this.state.messages} />
                     </Col>
-                    <Col flex={5}></Col>
-                </Row>
-                <Row>
-                    <OutputDisplay messages={this.state.messages} />
                 </Row>
             </div>
         );
