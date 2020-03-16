@@ -3,13 +3,14 @@ import mqtt, { MqttClient, IClientOptions } from "mqtt";
 import { message, Input, Spin, Switch, Modal, List, Row, Alert, Col, Button, Tag, Table } from "antd";
 import validator from "validator";
 import "antd/dist/antd.css";
-import { outer_frame, inputStyle, buttonStyle } from "./style/app.style";
+import { outer_frame, buttonStyle } from "./style/app.style";
 import { LocalStorage } from "./lib/LocalStorage";
 import { LSKEY_CONNECTIONS, MQC_MAX_MESSAGES_LENGTH } from "./lib/constants";
 import { IMqcState, Connection_t, Test_t, OutputMessage_t, OnChangeInputText } from "./types/App";
 import "font-awesome/css/font-awesome.min.css";
 import { CredentialsForm } from "./components/CredentialsForm";
 import { v4 as uuid } from "uuid";
+import { BrokerForm } from "./components/BrokerForm";
 const ls = new LocalStorage();
 // todo: write readme documentation
 export default class App extends React.Component<any, IMqcState> {
@@ -176,36 +177,13 @@ export default class App extends React.Component<any, IMqcState> {
 
     private brokerForm = () => {
         return (
-            <>
-                <h3>Hostname</h3>
-                <Input
-                    style={inputStyle}
-                    disabled={this.state.running}
-                    onChange={this.onChange("hostname")}
-                    value={this.state.hostname}
-                    placeholder="Hostname (e.g. broker.emqx.io)"
-                    // todo: add filtering by host
-                />
-                <h3>Port</h3>
-                <Input
-                    style={inputStyle}
-                    type="number"
-                    disabled={this.state.running}
-                    onChange={this.onChange("port")}
-                    value={this.state.port}
-                    placeholder="Port (e.g. 1883)"
-                    // todo: add filtering by port
-                />
-                <h3>Path</h3>
-                <Input
-                    style={inputStyle}
-                    disabled={this.state.running}
-                    onChange={this.onChange("brokerPath")}
-                    value={this.state.brokerPath}
-                    placeholder="Path (e.g. /mqtt) leave it empty if unnecessary"
-                    // todo: add filtering by port
-                />
-            </>
+            <BrokerForm
+                hostname={this.state.hostname}
+                running={this.state.running}
+                port={this.state.port}
+                brokerPath={this.state.brokerPath}
+                onChange={this.onChange}
+            />
         );
     };
 
