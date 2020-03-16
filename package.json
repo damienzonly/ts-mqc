@@ -38,7 +38,7 @@
         "electron:build": "yarn clean && yarn install && yarn build && yarn dist",
         "electron": "electron .",
         "clean": "rm -rf build dist yarn.lock node_modules",
-        "dist": "electron-builder --linux deb rpm --win nsis --x64"
+        "dist": "electron-builder --mac dmg --linux deb rpm --win nsis --x64"
     },
     "eslintConfig": {
         "extends": "react-app"
