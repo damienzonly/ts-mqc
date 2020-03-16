@@ -1,16 +1,28 @@
 import React from "react";
-import mqtt, { MqttClient, IClientOptions } from "mqtt";
-import { message, Input, Spin, Switch, Modal, List, Row, Alert, Col, Button, Tag, Table } from "antd";
+import mqtt, { MqttClient, IClientOptions, OnMessageCallback } from "mqtt";
+import { message, Switch, Row, Col } from "antd";
 import validator from "validator";
 import "antd/dist/antd.css";
-import { outer_frame, buttonStyle } from "./style/app.style";
+import { outer_frame } from "./style/app.style";
 import { LocalStorage } from "./lib/LocalStorage";
 import { LSKEY_CONNECTIONS, MQC_MAX_MESSAGES_LENGTH } from "./lib/constants";
-import { IMqcState, Connection_t, Test_t, OutputMessage_t, OnChangeInputText } from "./types/App";
+import {
+    IMqcState,
+    Connection_t,
+    Test_t,
+    OutputMessage_t,
+    OnChangeInputText,
+    DeleteConnectionMethod,
+    SelectConnectionMethod
+} from "./types/App";
 import "font-awesome/css/font-awesome.min.css";
 import { CredentialsForm } from "./components/CredentialsForm";
 import { v4 as uuid } from "uuid";
 import { BrokerForm } from "./components/BrokerForm";
+import { ButtonsBar } from "./components/ButtonsBar";
+import { RecentConnections } from "./components/RecentConnections";
+import { TopicsModal } from "./components/TopicsModal";
+import { OutputDisplay } from "./components/OuputDisplay";
 const ls = new LocalStorage();
 // todo: write readme documentation
 export default class App extends React.Component<any, IMqcState> {
@@ -41,17 +53,21 @@ export default class App extends React.Component<any, IMqcState> {
      * This method will save the following state properties
      * in the connections key of localstorage:
      * **hostname**, **brokerPath**, **port**, **protocol**, **topics**, **username**
-     *
      */
     private saveConf = () => {
         const hostname = this.state.hostname;
-        const brokerPath = this.state.brokerPath;
         const port = this.state.port;
         const protocol = this.state.protocol;
-        const topics = this.state.topics;
-        const username = this.state.username;
         if (!hostname || !port || !protocol) return;
-        const connection: Connection_t = { uuid: uuid(), hostname, brokerPath, port, protocol, topics, username };
+        const connection: Connection_t = {
+            uuid: uuid(),
+            hostname: this.state.hostname,
+            brokerPath: this.state.brokerPath,
+            port: this.state.port,
+            protocol: this.state.protocol,
+            topics: this.state.topics,
+            username: this.state.username
+        };
         const saved_connections = ls.get(LSKEY_CONNECTIONS);
         if (saved_connections) {
             // save only if a similar configuration doesn't exist
@@ -78,11 +94,9 @@ export default class App extends React.Component<any, IMqcState> {
             }
         ];
 
-        tests.forEach((test: Test_t) => {
-            if (!test.cond) {
-                throw test.message;
-            }
-        });
+        for (const { cond, message } of tests) {
+            if (!cond) throw message;
+        }
     };
 
     start = () => {
@@ -134,6 +148,30 @@ export default class App extends React.Component<any, IMqcState> {
         }
     };
 
+    /**
+     * Used when the user enables the message parsing
+     * flag in the app settings
+     */
+    private handleJSONMessage: OnMessageCallback = (topic, message) => {
+        const msg = message.toString();
+        let payload;
+        try {
+            const parsed = JSON.parse(msg);
+            payload = JSON.stringify(parsed, null, 4);
+        } catch (e) {
+            payload = msg;
+        }
+        this.addMessage({ topic, payload, ts: Date.now() });
+    };
+
+    /**
+     * Used when the user disables the message parsing
+     * flag in the app settings
+     */
+    private handlePlainMessage: OnMessageCallback = (topic, message) => {
+        this.addMessage({ topic, payload: message.toString(), ts: Date.now() });
+    };
+
     private initializeClient = () => {
         const opts: IClientOptions = {};
         if (this.state.credentials) {
@@ -145,6 +183,11 @@ export default class App extends React.Component<any, IMqcState> {
         this.client
             .on("message", (topic, message) => {
                 // todo: add json flag configuration to avoid parsing when unnecessary
+                // if (this.state.jsonparseflag) {
+                //     setImmediate(() => this.handleJSONMessage(topic, message));
+                // } else {
+                //     setImmediate(() => this.handlePlainMessage(topic, message));
+                // }
                 const msg = message.toString();
                 let payload;
                 try {
@@ -187,34 +230,22 @@ export default class App extends React.Component<any, IMqcState> {
         );
     };
 
+    private onCredentialsSwitch = v => {
+        this.setState({
+            credentials: v,
+            username: "",
+            password: ""
+        });
+    };
+
     private credentialsSwitch = () => {
         return (
             <Switch
                 disabled={this.state.running}
                 style={{ margin: 10, marginBottom: 20, marginLeft: 0 }}
-                onChange={v => {
-                    this.setState({
-                        credentials: v,
-                        username: "",
-                        password: ""
-                    });
-                }}
+                onChange={this.onCredentialsSwitch}
                 checked={this.state.credentials}
             />
-        );
-    };
-
-    private removeTopicButton = (topic: string) => {
-        return (
-            <Button
-                type={"danger"}
-                onClick={() => {
-                    this.removeTopic(topic);
-                }}
-            >
-                <i className="fa fa-plus" />
-                &nbsp; Delete
-            </Button>
         );
     };
 
@@ -227,47 +258,16 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     private topicsModal = () => {
-        const topics = Object.keys(this.state.topics);
-        const submitFn = () => {
-            this.addTopic(this.state.draft_topic);
-            this.setState({ draft_topic: "" });
-        };
         return (
-            <>
-                <Modal
-                    title="Topics"
-                    visible={this.state.topicsModal}
-                    onCancel={this.closeTopicsModal}
-                    onOk={this.closeTopicsModal}
-                >
-                    <h3> Add Topics </h3>
-                    <Input
-                        value={this.state.draft_topic}
-                        onChange={this.onChange("draft_topic")}
-                        onPressEnter={submitFn}
-                        placeholder={"Type a topic and press enter"}
-                    ></Input>
-                    <List
-                        style={{ width: "100%" }}
-                        dataSource={topics}
-                        renderItem={(topic: string) => {
-                            return (
-                                <List.Item
-                                    key={topic}
-                                    style={{
-                                        display: "flex",
-                                        wordBreak: "break-word",
-                                        justifyContent: "space-between"
-                                    }}
-                                >
-                                    {<Tag color={"purple"}>{topic}</Tag>}
-                                    {this.removeTopicButton(topic)}
-                                </List.Item>
-                            );
-                        }}
-                    ></List>
-                </Modal>
-            </>
+            <TopicsModal
+                draft_topic={this.state.draft_topic}
+                addTopic={this.addTopic}
+                removeTopic={this.removeTopic}
+                onChange={this.onChange}
+                closeTopicsModal={this.closeTopicsModal}
+                topics={this.state.topics}
+                topicsModal={this.state.topicsModal}
+            />
         );
     };
 
@@ -282,31 +282,15 @@ export default class App extends React.Component<any, IMqcState> {
         );
     };
 
-    private lowerButtons = () => {
+    private buttonsBar = () => {
         return (
-            <>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <div>
-                        <Button style={buttonStyle} onClick={this.start} disabled={this.state.running} type={"primary"}>
-                            Start
-                        </Button>
-                        <Button style={buttonStyle} onClick={this.stop} disabled={!this.state.running} type={"danger"}>
-                            Stop
-                        </Button>
-                        {this.state.running ? <Spin style={{ marginLeft: 10 }} /> : null}
-                    </div>
-                    <div>
-                        <Button
-                            style={{ ...buttonStyle, marginRight: 0 }}
-                            onClick={this.openTopicsModal}
-                            disabled={this.state.topicsModal}
-                            type={"primary"}
-                        >
-                            Add Topics
-                        </Button>
-                    </div>
-                </div>
-            </>
+            <ButtonsBar
+                openTopicsModal={this.openTopicsModal}
+                running={this.state.running}
+                start={this.start}
+                stop={this.stop}
+                topicsModal={this.state.topicsModal}
+            />
         );
     };
 
@@ -338,11 +322,6 @@ export default class App extends React.Component<any, IMqcState> {
         }
     };
 
-    private fallbackNone = (string: string) => {
-        if (string) return string;
-        else return <Tag color={"blue"}>{"<none>"}</Tag>;
-    };
-
     private getSimilarConnections = (conn: Connection_t) => {
         return (
             conn.brokerPath === this.state.brokerPath &&
@@ -352,7 +331,7 @@ export default class App extends React.Component<any, IMqcState> {
         );
     };
 
-    private selectConnection = (connection: Connection_t) => () => {
+    private selectConnection: SelectConnectionMethod = connection => () => {
         const conns = this.state.connections.filter((conn: Connection_t) => {
             return connection.uuid === conn.uuid;
         });
@@ -370,8 +349,7 @@ export default class App extends React.Component<any, IMqcState> {
         }
     };
 
-    private deleteConnection = (connection: Connection_t) => () => {
-        debugger;
+    private deleteConnection: DeleteConnectionMethod = connection => () => {
         const connections = [...this.state.connections].filter((conn: Connection_t) => {
             return connection.uuid !== conn.uuid;
         });
@@ -380,43 +358,17 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     render = () => {
-        const recentConnectionsColumns = [
-            { title: "Hostname", dataIndex: "hostname", render: this.fallbackNone },
-            { title: "Port", dataIndex: "port", render: this.fallbackNone },
-            { title: "Username", dataIndex: "username", render: this.fallbackNone },
-            { title: "Path", dataIndex: "brokerPath", render: this.fallbackNone },
-            {
-                title: "",
-                render: (record: Connection_t) => {
-                    return (
-                        <>
-                            <Button style={buttonStyle} onClick={this.selectConnection(record)} type={"primary"}>
-                                Select
-                            </Button>
-                            <Button style={buttonStyle} onClick={this.deleteConnection(record)} type={"danger"}>
-                                Delete
-                            </Button>
-                        </>
-                    );
-                }
-            }
-        ];
         return (
             <div style={outer_frame}>
                 {this.topicsModal()}
                 <Row gutter={100}>
                     <Col flex={2}>
-                        <h2> Recent Connections </h2>
-                        <Button style={{ marginBottom: 10 }} type={"primary"} onClick={this.clearConnections}>
-                            Clear
-                        </Button>
-                        <Table
-                            style={{ minWidth: "30%" }}
-                            rowKey={"uuid"}
-                            size={"small"}
-                            columns={recentConnectionsColumns}
-                            dataSource={this.state.connections}
-                        ></Table>
+                        <RecentConnections
+                            clearConnections={this.clearConnections}
+                            connections={this.state.connections}
+                            deleteConnection={this.deleteConnection}
+                            selectConnection={this.selectConnection}
+                        />
                     </Col>
                     <Col flex={5}>
                         <h2> Connection configuration </h2>
@@ -424,33 +376,12 @@ export default class App extends React.Component<any, IMqcState> {
                         <h3> Use Credentials </h3>
                         {this.credentialsSwitch()}
                         {this.state.credentials ? this.credentialsForm() : <div></div>}
-                        {this.lowerButtons()}
+                        {this.buttonsBar()}
                     </Col>
                     <Col flex={5}></Col>
                 </Row>
                 <Row>
-                    <List
-                        style={{
-                            width: "100%"
-                        }}
-                        dataSource={this.state.messages}
-                        renderItem={(message: OutputMessage_t, i) => {
-                            return (
-                                <List.Item
-                                    key={message.payload + i}
-                                    style={{
-                                        whiteSpace: "pre-wrap",
-                                        display: "flex",
-                                        justifyContent: "space-between"
-                                    }}
-                                >
-                                    <Alert type={"info"} message={new Date(message.ts).toISOString()} />
-                                    <Alert type={"success"} message={message.topic} />
-                                    <Alert type={"error"} message={message.payload} />
-                                </List.Item>
-                            );
-                        }}
-                    ></List>
+                    <OutputDisplay messages={this.state.messages} />
                 </Row>
             </div>
         );

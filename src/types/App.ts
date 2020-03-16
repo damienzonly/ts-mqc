@@ -42,3 +42,8 @@ export interface IMqcState {
     messages: OutputMessage_t[];
     running: boolean;
 }
+
+export type SelectConnectionMethod = (c: Connection_t) => () => void;
+export type DeleteConnectionMethod = (c: Connection_t) => () => void;
+export type AddTopicMethod = (s: string) => void;
+export type RemoveTopicMethod = (s: string) => void;
