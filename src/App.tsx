@@ -11,7 +11,7 @@ import "font-awesome/css/font-awesome.min.css";
 import { CredentialsForm } from "./components/CredentialsForm";
 import { v4 as uuid } from "uuid";
 const ls = new LocalStorage();
-
+// todo: write readme documentation
 export default class App extends React.Component<any, IMqcState> {
     state = {
         hostname: "",

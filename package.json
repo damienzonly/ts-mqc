@@ -1,7 +1,13 @@
 {
+    "author": "Damiano Di Natale <damianomails@gmail.com>",
     "name": "mqc",
-    "version": "0.1.0",
+    "version": "1.0.0",
+    "build": {
+        "appId": "<com.your_app>"
+    },
     "private": true,
+    "homepage": "./",
+    "main": "public/electron.js",
     "dependencies": {
         "@testing-library/jest-dom": "^4.2.4",
         "@testing-library/react": "^9.3.2",
@@ -12,12 +18,15 @@
         "@types/react-dom": "^16.9.0",
         "@types/validator": "^12.0.1",
         "antd": "^4.0.2",
+        "cross-env": "^7.0.2",
+        "electron-is-dev": "^1.1.0",
         "font-awesome": "^4.7.0",
         "mqtt": "^3.0.0",
         "react": "^16.13.0",
         "react-dom": "^16.13.0",
         "react-scripts": "3.4.0",
         "typescript": "~3.7.2",
+        "uuid": "^7.0.2",
         "validator": "^12.2.0"
     },
     "scripts": {
@@ -25,7 +34,12 @@
         "start": "react-scripts start",
         "build": "react-scripts build",
         "test": "react-scripts test",
-        "eject": "react-scripts eject"
+        "eject": "react-scripts eject",
+        "electron:build": "yarn build && yarn dist",
+        "electron": "electron .",
+        "clean": "rm -rf build dist yarn.lock",
+        "dist": "electron-builder --linux deb rpm --win nsis --x64",
+        "release": "yarn react-build && electron-builder --publish=always"
     },
     "eslintConfig": {
         "extends": "react-app"
@@ -43,6 +57,11 @@
         ]
     },
     "devDependencies": {
-        "prettier": "^1.19.1"
+        "@types/uuid": "^7.0.0",
+        "concurrently": "^5.1.0",
+        "electron": "^8.1.1",
+        "electron-builder": "^22.4.1",
+        "prettier": "^1.19.1",
+        "wait-on": "^4.0.1"
     }
 }
