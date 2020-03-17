@@ -1,6 +1,6 @@
 import React from "react";
 import "antd/dist/antd.css";
-import { Switch, Modal, Input, Button } from "antd";
+import { Switch, Modal, Input } from "antd";
 
 export interface SettingsModalProps {
     checked: boolean;

@@ -2,7 +2,6 @@ import React from "react";
 import { Table, Alert } from "antd";
 import "antd/dist/antd.css";
 import { OutputMessage_t } from "../types/App";
-import Button, { ButtonProps } from "antd/lib/button";
 
 export interface OutputDisplayProps {
     running: boolean;
