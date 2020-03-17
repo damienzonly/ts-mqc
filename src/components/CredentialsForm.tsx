@@ -1,14 +1,15 @@
 import React from "react";
 import { Input } from "antd";
 import { inputStyle } from "../style/app.style";
-import { OnChangeInputText } from "../types/App";
+import { OnChangeInputTextFunction } from "../types/App";
 
 export interface CredentialsFormProps {
     running: boolean;
     username: string;
     password: string;
-    onChange: OnChangeInputText;
-    [x: string]: any;
+    onChange_connection_username: OnChangeInputTextFunction;
+    onChange_connection_password: OnChangeInputTextFunction;
+    onChange_connection_brokerPath: OnChangeInputTextFunction;
 }
 
 export class CredentialsForm extends React.Component<CredentialsFormProps> {
@@ -19,7 +20,7 @@ export class CredentialsForm extends React.Component<CredentialsFormProps> {
                 <Input
                     style={inputStyle}
                     disabled={this.props.running}
-                    onChange={this.props.onChange("username")}
+                    onChange={this.props.onChange_connection_username}
                     value={this.props.username}
                     placeholder="Username"
                 />
@@ -28,7 +29,7 @@ export class CredentialsForm extends React.Component<CredentialsFormProps> {
                     type="password"
                     style={inputStyle}
                     disabled={this.props.running}
-                    onChange={this.props.onChange("password")}
+                    onChange={this.props.onChange_connection_password}
                     value={this.props.password}
                     placeholder="Password"
                 />

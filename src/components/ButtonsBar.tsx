@@ -16,24 +16,12 @@ export interface ButtonsBarProps {
 export class ButtonsBar extends React.Component<ButtonsBarProps> {
     render() {
         return (
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <div>
-                    <Button style={buttonStyle} onClick={this.props.save} type={"primary"}>
-                        Save
-                    </Button>
-                    {this.props.running ? <Spin style={{ marginLeft: 10 }} /> : null}
-                </div>
-                <div>
-                    <Button
-                        style={{ ...buttonStyle, marginRight: 0 }}
-                        onClick={this.props.open_modal_topics}
-                        disabled={this.props.modal_topics}
-                        type={"primary"}
-                    >
-                        Add Topics
-                    </Button>
-                </div>
-            </div>
+            <>
+                <Button style={buttonStyle} onClick={this.props.save} type={"primary"}>
+                    Save
+                </Button>
+                {this.props.running ? <Spin style={{ marginLeft: 10 }} /> : null}
+            </>
         );
     }
 }
