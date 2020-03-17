@@ -28,7 +28,7 @@ import { TopicsForm } from "./components/TopicsForm";
 import { OutputDisplay } from "./components/OutputDisplay";
 import { SettingsModal } from "./components/SettingsModal";
 import _ from "lodash";
-message.config({duration: 2});
+message.config({ duration: 2 });
 
 const ls = new LocalStorage();
 // todo: write readme documentation
@@ -113,7 +113,7 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     private _clearMessages = () => {
-        this.setState({state_messages_list: []})
+        this.setState({ state_messages_list: [] })
     }
 
     private _saveAll = () => {
@@ -285,7 +285,7 @@ export default class App extends React.Component<any, IMqcState> {
         this.setState({ state_modal_settings: true });
     };
 
-    private close_modal_createConnection= () => {
+    private close_modal_createConnection = () => {
         this.setState({ state_modal_create_connection: false });
     };
 
@@ -297,13 +297,13 @@ export default class App extends React.Component<any, IMqcState> {
         this.open_modal_createConnection();
         this.setState({ state_modal_create_connection: true });
     };
-    
+
 
     private close_modal_createConnectionAndResetStateConnection = () => {
         this.close_modal_createConnection();
         this._resetStateConnection();
     };
-    
+
     private credentialsSwitch = () => {
         return (
             <Switch
@@ -544,6 +544,7 @@ export default class App extends React.Component<any, IMqcState> {
                 <Row gutter={50}>
                     <Col span={10}>
                         <RecentConnections
+                            clearMessagesFunction={this._clearMessages}
                             start={this.start}
                             stop={this.stop}
                             running={this.state.state_client_running}

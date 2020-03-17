@@ -54,3 +54,4 @@ export type SelectConnectionMethod = (c: Connection_t, cb?: () => void) => () =>
 export type DeleteConnectionMethod = (c: Connection_t) => () => void;
 export type AddTopicMethod = () => void;
 export type RemoveTopicMethod = (s: string) => void;
+export type VoidFunction = () => void;

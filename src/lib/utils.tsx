@@ -9,5 +9,5 @@ export const fallbackNone = (string?: string) => {
 };
 
 export const createButton = (props: ButtonProps, content) => {
-    return <Button {...props}>content</Button>;
+    return <Button {...props}>{content}</Button>;
 };
