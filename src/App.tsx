@@ -11,10 +11,12 @@ import {
     Connection_t,
     Test_t,
     OutputMessage_t,
-    OnChangeInputText,
+    OnChangeInputTextFunction,
     DeleteConnectionMethod,
     SelectConnectionMethod,
-    Settings_t
+    Settings_t,
+    AddTopicMethod,
+    RemoveTopicMethod
 } from "./types/App";
 import "font-awesome/css/font-awesome.min.css";
 import { CredentialsForm } from "./components/CredentialsForm";
@@ -22,109 +24,139 @@ import { v4 as uuid } from "uuid";
 import { BrokerForm } from "./components/BrokerForm";
 import { ButtonsBar } from "./components/ButtonsBar";
 import { RecentConnections } from "./components/RecentConnections";
-import { TopicsModal } from "./components/TopicsModal";
+import { TopicsForm } from "./components/TopicsForm";
 import { OutputDisplay } from "./components/OutputDisplay";
 import { SettingsModal } from "./components/SettingsModal";
+import _ from "lodash";
+message.config({duration: 2});
+
 const ls = new LocalStorage();
 // todo: write readme documentation
 export default class App extends React.Component<any, IMqcState> {
     state = {
-        hostname: "",
-        port: "",
-        connections: [],
-        username: "",
-        brokerPath: "/mqtt",
-        password: "",
-        protocol: "ws",
-        draft_topic: "",
-        modal_topics: false,
-        modal_settings: false,
-        modal_create_connection: false,
-        topics: {},
-        messages: [],
-        running: false,
-        credentials: false,
-        settings_parse_messages: false,
-        settings_max_messages: MQC_MAX_MESSAGES_LENGTH
+        // app properties
+        state_connections_list: [],
+        state_draft_topic: "",
+        state_modal_topics: false,
+        state_modal_settings: false,
+        state_modal_create_connection: false,
+        state_messages_list: [],
+        state_client_running: false,
+
+        // settings
+        settings_max_messages: MQC_MAX_MESSAGES_LENGTH,
+        settings_parse_json: true,
+
+        // connection
+        connection_uuid: "", // unused in state
+        connection_name: "",
+        connection_hostname: "",
+        connection_port: "",
+        connection_use_credentials: false,
+        connection_username: "",
+        connection_password: "",
+        connection_brokerPath: "",
+        connection_protocol: "",
+        connection_topics: {}
     };
 
     private client: MqttClient;
 
-    /**
-     * This method will save the following state properties
-     * in the connections key of localstorage:
-     * **hostname**, **brokerPath**, **port**, **protocol**,
-     * **topics**, **username**, **modal_create_connection**
-     */
-    private saveAll = () => {
-        // todo: update configuration found if existent and similar to the current
-        this.saveSettings();
-        this.saveConnection();
+    private _resetStateConnection = () => {
+        this.setState({
+            connection_uuid: "",
+            connection_name: "",
+            connection_hostname: "",
+            connection_port: "",
+            connection_use_credentials: false,
+            connection_username: "",
+            connection_password: "",
+            connection_brokerPath: "",
+            connection_protocol: "",
+            connection_topics: {}
+        });
     };
 
-    private saveSettings = () => {
+    private onChange_connection_name = e => {
+        this.setState({ connection_name: e.target.value });
+    };
+    private onChange_connection_hostname = e => {
+        this.setState({ connection_hostname: e.target.value });
+    };
+    private onChange_connection_port = e => {
+        this.setState({ connection_port: e.target.value });
+    };
+    private onChange_connection_use_credentials = v => {
+        this.setState({ connection_use_credentials: v });
+    };
+    private onChange_connection_username = e => {
+        this.setState({ connection_username: e.target.value });
+    };
+    private onChange_connection_password = e => {
+        this.setState({ connection_password: e.target.value });
+    };
+    private onChange_connection_brokerPath = e => {
+        this.setState({ connection_brokerPath: e.target.value });
+    };
+
+    private onChange_state_draft_topic = e => {
+        this.setState({ state_draft_topic: e.target.value });
+    };
+
+    private onChange_settings_parse_json = v => {
+        this.setState({ settings_parse_json: v });
+    };
+    private onChange_settings_max_messages = e => {
+        const settings_max_messages = e.target.value;
+        const state_messages_list = this.state.state_messages_list.slice(0, +settings_max_messages);
+        this.setState({ state_messages_list, settings_max_messages });
+    };
+
+    private _clearMessages = () => {
+        this.setState({state_messages_list: []})
+    }
+
+    private _saveAll = () => {
+        this._saveSettings();
+        this._saveConnections();
+    };
+
+    private _saveSettings = () => {
         const settings: Settings_t = {
-            modal_create_connection: this.state.modal_create_connection,
-            settings_max_messages: this.state.settings_max_messages
+            settings_max_messages: this.state.settings_max_messages,
+            settings_parse_json: this.state.settings_parse_json
         };
         ls.set(LSKEY_SETTINGS, settings);
-        message.success("Settings Saved");
     };
 
-    private saveConnection = () => {
-        const hostname = this.state.hostname;
-        const port = this.state.port;
-        const protocol = this.state.protocol;
-        if (!hostname || !port || !protocol) return;
-        const connection: Connection_t = {
-            uuid: uuid(),
-            hostname: this.state.hostname,
-            brokerPath: this.state.brokerPath,
-            port: this.state.port,
-            protocol: this.state.protocol,
-            topics: this.state.topics,
-            username: this.state.username
-        };
-        const saved_connections = ls.get(LSKEY_CONNECTIONS);
-        if (saved_connections) {
-            // save only if a similar configuration doesn't exist
-            const similarConnections: Connection_t[] = saved_connections.filter(this.getSimilarConnections);
-            if (!similarConnections.length) {
-                saved_connections.unshift(connection);
-                ls.set(LSKEY_CONNECTIONS, saved_connections);
-                this.setState({ connections: saved_connections });
-            }
+    private _saveConnections = () => {
+        ls.set(LSKEY_CONNECTIONS, this.state.state_connections_list);
+    };
+
+    private createOrUpdateConnection = () => {
+        // todo: validate state
+        const connection: Connection_t = this._getConnectionFromState();
+        const state_connections: Connection_t[] = _.cloneDeep(this.state.state_connections_list);
+        const foundConnIdx = _.findIndex(
+            state_connections,
+            (c: Connection_t) => c.connection_uuid === connection.connection_uuid
+        );
+        if (foundConnIdx !== -1) {
+            _.assign(state_connections[foundConnIdx], connection);
         } else {
-            ls.set(LSKEY_CONNECTIONS, [connection]);
-            this.setState({ connections: [connection] });
+            state_connections.unshift(connection);
         }
-        message.success("Connection Saved");
-    };
-
-    private validateState = () => {
-        const tests: Test_t[] = [
-            { cond: !!this.state.protocol, message: "Protocol is missing (ws | mqtt)" },
-            { cond: !!this.state.hostname, message: "Hostname is empty" },
-            { cond: validator.isPort(this.state.port), message: "Port is not valid" },
-            {
-                cond: !this.state.credentials || (!!this.state.username && !!this.state.password),
-                message: "Credentials are not set properly"
-            }
-        ];
-
-        for (const { cond, message } of tests) {
-            if (!cond) throw message;
-        }
+        this.setState({ state_connections_list: state_connections });
+        ls.set(LSKEY_CONNECTIONS, state_connections);
     };
 
     start = () => {
         try {
-            this.validateState();
+            this._validateConnectionFromState();
             this.stopClient();
             this.initializeClient();
             this.setRunning();
-            // save current configuration as a new connection record
-            this.saveAll();
+            this._saveAll();
             this.close_modal_createConnection();
         } catch (e) {
             message.error(e.toString());
@@ -138,42 +170,28 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     private setRunning = () => {
-        this.setState({ running: true });
+        this.setState({ state_client_running: true });
     };
 
     private unsetRunning = () => {
-        this.setState({ running: false });
-    };
-
-    // todo: settings modal
-    private modal_settings = () => {
-        return (
-            <SettingsModal
-                saveSettings={this.saveSettings}
-                onMessagesNumberChange={this.onChangeSettingsMaxMessages}
-                messages_number={this.state.settings_max_messages}
-                visible={this.state.modal_settings}
-                onOk={this.close_modal_settings}
-                onCancel={this.close_modal_settings}
-                checked={this.state.settings_parse_messages}
-                onChange={this.onChangeSwitch("settings_parse_messages")}
-            />
-        );
+        this.setState({ state_client_running: false });
     };
 
     componentDidMount = () => {
         this.stop();
         const connections = ls.get(LSKEY_CONNECTIONS);
         if (connections !== null && Array.isArray(connections) && connections.length) {
-            this.setState({ connections });
+            this.setState({ state_connections_list: connections });
+        } else {
+            this.open_modal_createConnection();
         }
         const settings: Settings_t = ls.get(LSKEY_SETTINGS);
         if (settings) {
             this.setState(settings);
         } else {
             const initSettings: Settings_t = {
-                modal_create_connection: this.state.modal_create_connection,
-                settings_max_messages: this.state.settings_max_messages
+                settings_max_messages: this.state.settings_max_messages,
+                settings_parse_json: this.state.settings_parse_json
             };
             ls.set(LSKEY_SETTINGS, initSettings);
         }
@@ -216,140 +234,157 @@ export default class App extends React.Component<any, IMqcState> {
 
     private initializeClient = () => {
         const opts: IClientOptions = {};
-        if (this.state.credentials) {
-            opts.username = this.state.username;
-            opts.password = this.state.password;
+        if (this.state.connection_use_credentials) {
+            opts.username = this.state.connection_username;
+            opts.password = this.state.connection_password;
         }
-        const uri = `${this.state.protocol}://${this.state.hostname}:${this.state.port}${this.state.brokerPath}`;
+        const uri = ` ws://${this.state.connection_hostname}:${this.state.connection_port}${this.state.connection_brokerPath}`;
         this.client = mqtt.connect(uri, opts);
         this.client
             .on("message", (topic, message, packet) => {
                 // todo: add json flag configuration to avoid parsing when unnecessary
-                if (this.state.settings_parse_messages) {
+                if (this.state.settings_parse_json) {
                     setImmediate(() => this.handleJSONMessage(topic, message, packet));
                 } else {
                     setImmediate(() => this.handlePlainMessage(topic, message, packet));
                 }
             })
             .on("connect", () => {
-                message.success(`Connected to ${this.state.hostname}`);
+                message.success(`Connected to ${this.state.connection_hostname}`);
             })
             .on("end", () => {
-                message.info(`Connection to ${this.state.hostname} closed`);
+                message.info(`Connection to ${this.state.connection_hostname} closed`);
             })
             .on("offline", () => {
-                message.error("Could not connect to broker");
+                message.error("Connection went offline");
             });
-        Object.keys(this.state.topics).forEach(topic => {
+        Object.keys(this.state.connection_topics).forEach(topic => {
             this.client.subscribe(topic);
         });
     };
 
-    onChange: OnChangeInputText = prop => e => {
+    onChange: OnChangeInputTextFunction = prop => e => {
         const newState = {};
         newState[prop] = e.target.value;
         this.setState(newState);
     };
 
-    private brokerForm = () => {
-        return (
-            <BrokerForm
-                hostname={this.state.hostname}
-                running={this.state.running}
-                port={this.state.port}
-                brokerPath={this.state.brokerPath}
-                onChange={this.onChange}
-            />
-        );
-    };
-
-    private onCredentialsSwitch = v => {
-        this.setState({
-            credentials: v,
-            username: "",
-            password: ""
-        });
-    };
-
-    private onChangeSwitch = (prop: string) => (v: boolean) => {
-        const nextState = {};
-        nextState[prop] = v;
-        this.setState(nextState);
-    };
-
-    private credentialsSwitch = () => {
-        return (
-            <Switch
-                disabled={this.state.running}
-                style={{ margin: 10, marginBottom: 20, marginLeft: 0 }}
-                onChange={this.onCredentialsSwitch}
-                checked={this.state.credentials}
-            />
-        );
-    };
-
-    private onChangeSettingsMaxMessages = e => {
-        const valueAsString = e.target.value;
-        const valueAsNumber = Number(valueAsString);
-        this.setState({
-            settings_max_messages: valueAsString,
-            messages: this.state.messages.slice(0, valueAsNumber)
-        });
-    };
-
     private close_modal_topics = () => {
-        this.setState({ modal_topics: false });
+        this.setState({ state_modal_topics: false });
     };
 
     private open_modal_topics = () => {
-        this.setState({ modal_topics: true });
+        this.setState({ state_modal_topics: true });
     };
 
     private close_modal_settings = () => {
-        this.setState({ modal_settings: false });
+        this.setState({ state_modal_settings: false });
     };
 
     private open_modal_settings = () => {
-        this.setState({ modal_settings: true });
+        this.setState({ state_modal_settings: true });
     };
 
-    private close_modal_createConnection = () => {
-        this.setState({ modal_create_connection: false });
+    private close_modal_createConnection= () => {
+        this.setState({ state_modal_create_connection: false });
     };
 
     private open_modal_createConnection = () => {
-        this.setState({ modal_create_connection: true });
+        this.setState({ state_modal_create_connection: true });
+    };
+
+    private open_modal_createConnectionAndResetStateConnection = () => {
+        this.open_modal_createConnection();
+        this.setState({ state_modal_create_connection: true });
+    };
+    
+
+    private close_modal_createConnectionAndResetStateConnection = () => {
+        this.close_modal_createConnection();
+        this._resetStateConnection();
+    };
+    
+    private credentialsSwitch = () => {
+        return (
+            <Switch
+                disabled={this.state.state_client_running}
+                style={{ margin: 10, marginBottom: 20, marginLeft: 0 }}
+                onChange={this.onChange_connection_use_credentials}
+                checked={this.state.connection_use_credentials}
+            />
+        );
+    };
+
+    private modal_settings = () => {
+        return (
+            <>
+                <SettingsModal
+                    onMessagesNumberChange={this.onChange_settings_max_messages}
+                    messages_number={this.state.settings_max_messages}
+                    visible={this.state.state_modal_settings}
+                    onOk={() => {
+                        this.close_modal_settings();
+                        this._saveSettings()
+                    }}
+                    onCancel={this.close_modal_settings}
+                    checked={this.state.settings_parse_json}
+                    onChange={this.onChange_settings_parse_json}
+                />
+            </>
+        );
+    };
+
+    private brokerForm = () => {
+        return (
+            <BrokerForm
+                hostname={this.state.connection_hostname}
+                running={this.state.state_client_running}
+                port={this.state.connection_port}
+                brokerPath={this.state.connection_brokerPath}
+                connection_name={this.state.connection_name}
+                onChange_connection_name={this.onChange_connection_name}
+                onChange_connection_hostname={this.onChange_connection_hostname}
+                onChange_connection_port={this.onChange_connection_port}
+                onChange_connection_brokerPath={this.onChange_connection_brokerPath}
+            />
+        );
     };
 
     private modal_createConnection = () => {
         return (
             <>
-                <h2> Connection configuration </h2>
-                {this.brokerForm()}
-                <h3> Use Credentials </h3>
-                {this.credentialsSwitch()}
-                {this.state.credentials ? this.credentialsForm() : <div></div>}
-                {this.buttonsBar()}
+                <Modal
+                    onOk={() => {
+                        this.createOrUpdateConnection();
+                        this.close_modal_createConnectionAndResetStateConnection();
+                    }}
+                    okText={"Save"}
+                    onCancel={this.close_modal_createConnection}
+                    visible={this.state.state_modal_create_connection}
+                >
+                    <h2> Connection configuration </h2>
+                    {this.brokerForm()}
+                    <h3> Use Credentials </h3>
+                    {this.credentialsSwitch()}
+                    {this.state.connection_use_credentials ? this.credentialsForm() : <div />}
+                    {/* {this.buttonsBar()} */}
+                    {this.topicsForm()}
+                </Modal>
             </>
         );
     };
 
-    private onAddTopic = () => {
-        this.addTopic(this.state.draft_topic);
-        this.setState({ draft_topic: "" });
-    };
-
-    private modal_topics = () => {
+    private topicsForm = () => {
         return (
-            <TopicsModal
-                submitFn={this.onAddTopic}
-                draft_topic={this.state.draft_topic}
+            <TopicsForm
+                topics={this.state.connection_topics}
+                draft_topic={this.state.state_draft_topic}
+                onChange_state_draft_topic={this.onChange_state_draft_topic}
                 addTopic={this.addTopic}
                 removeTopic={this.removeTopic}
-                onChange={this.onChange}
-                closeTopicsModal={this.close_modal_topics}
-                topics={this.state.topics}
-                modal_topics={this.state.modal_topics}
+                modal_topics={this.state.state_modal_topics}
+                onOk={this.close_modal_topics}
+                onCancel={this.close_modal_topics}
             />
         );
     };
@@ -357,10 +392,12 @@ export default class App extends React.Component<any, IMqcState> {
     private credentialsForm = () => {
         return (
             <CredentialsForm
-                running={this.state.running}
-                onChange={this.onChange}
-                password={this.state.password}
-                username={this.state.username}
+                running={this.state.state_client_running}
+                onChange_connection_brokerPath={this.onChange_connection_brokerPath}
+                onChange_connection_password={this.onChange_connection_password}
+                onChange_connection_username={this.onChange_connection_username}
+                password={this.state.connection_password}
+                username={this.state.connection_username}
             />
         );
     };
@@ -368,66 +405,120 @@ export default class App extends React.Component<any, IMqcState> {
     private buttonsBar = () => {
         return (
             <ButtonsBar
-                save={this.saveConnection}
+                save={this.createOrUpdateConnection}
                 open_modal_topics={this.open_modal_topics}
                 open_modal_settings={this.open_modal_settings}
-                running={this.state.running}
+                running={this.state.state_client_running}
                 start={this.start}
                 stop={this.stop}
-                modal_topics={this.state.modal_topics}
+                modal_topics={this.state.state_modal_topics}
             />
         );
     };
 
     private addMessage = (message: OutputMessage_t) => {
-        const messages: OutputMessage_t[] = [...this.state.messages].slice(0, this.state.settings_max_messages - 1);
-        messages.unshift(message);
-        this.setState({ messages });
-    };
-
-    private addTopic = (pattern: string) => {
-        if (!pattern) return;
-        const topics = { ...this.state.topics };
-        topics[pattern] = { pattern };
-        this.setState({ topics }, this.saveConnection);
-        if (this.client) {
-            this.client.subscribe(pattern);
-        }
-    };
-
-    private removeTopic = (pattern: string) => {
-        const topics = { ...this.state.topics };
-        delete topics[pattern];
-        this.setState({ topics });
-        if (this.client) {
-            this.client.unsubscribe(pattern);
-        }
-    };
-
-    private getSimilarConnections = (conn: Connection_t) => {
-        return (
-            conn.brokerPath === this.state.brokerPath &&
-            conn.protocol === this.state.protocol &&
-            conn.username === this.state.username &&
-            conn.port === this.state.port
+        const messages: OutputMessage_t[] = [...this.state.state_messages_list].slice(
+            0,
+            this.state.settings_max_messages - 1
         );
+        messages.unshift(message);
+        this.setState({ state_messages_list: messages });
+    };
+
+    private _getConnectionFromState = () => {
+        return {
+            connection_uuid: this.state.connection_uuid || uuid(),
+            connection_name: this.state.connection_name,
+            connection_hostname: this.state.connection_hostname,
+            connection_port: this.state.connection_port,
+            connection_use_credentials: this.state.connection_use_credentials,
+            connection_username: this.state.connection_username,
+            connection_password: this.state.connection_password,
+            connection_brokerPath: this.state.connection_brokerPath,
+            connection_protocol: this.state.connection_protocol,
+            connection_topics: this.state.connection_topics
+        };
+    };
+
+    private _validateConnectionFromState = () => {
+        const tests: Test_t[] = [
+            { cond: !!this.state.connection_name, message: "Connection name is empty" },
+            { cond: !!this.state.connection_hostname, message: "Hostname is empty" },
+            { cond: validator.isPort(this.state.connection_port), message: "Port is not valid" },
+            {
+                // if the flag is enabled check validity of credentials
+                cond:
+                    !this.state.connection_use_credentials ||
+                    (!!this.state.connection_username && !!this.state.connection_password),
+                message: "Credentials are not set properly"
+            }
+        ];
+
+        for (const { cond, message } of tests) {
+            if (!cond) throw message;
+        }
+    };
+
+    private addTopic: AddTopicMethod = () => {
+        if (!this.state.state_draft_topic) return;
+        const connection = this._getConnectionFromState();
+        this.setState(connection);
+        const topic = this.state.state_draft_topic;
+        const newTopicOjb = { [topic]: {} };
+        const connections_list: Connection_t[] = _.cloneDeep(this.state.state_connections_list);
+        const foundConnectionIndex = _.findIndex(
+            connections_list,
+            (c: Connection_t) => c.connection_uuid === connection.connection_uuid
+        );
+        if (foundConnectionIndex !== -1) {
+            _.assign(connections_list[foundConnectionIndex].connection_topics, newTopicOjb);
+        } else {
+            connections_list.unshift(connection);
+        }
+        _.assign(connection.connection_topics, newTopicOjb);
+        // finally subscribe to the new topic
+        if (this.client) {
+            this.client.subscribe(topic);
+        }
+        this.setState({ state_draft_topic: "" });
+    };
+
+    private removeTopic: RemoveTopicMethod = topic => {
+        const connection = this._getConnectionFromState();
+        const connections_list: Connection_t[] = _.cloneDeep(this.state.state_connections_list);
+        const connIdx = _.findIndex(
+            connections_list,
+            (c: Connection_t) => c.connection_uuid === connection.connection_uuid
+        );
+        if (connIdx !== -1) {
+            delete connections_list[connIdx].connection_topics[topic];
+            delete connection.connection_topics[topic];
+            this.setState({ ...connection, state_connections_list: connections_list });
+            // finally unsubscribe to the topic
+            if (this.client) {
+                this.client.unsubscribe(topic);
+            }
+        }
     };
 
     private selectConnection: SelectConnectionMethod = (connection, cb) => () => {
-        const conns = this.state.connections.filter((conn: Connection_t) => {
-            return connection.uuid === conn.uuid;
-        });
-        if (conns.length !== 0) {
-            const connection: Connection_t = conns[0];
+        const conn = _.find(
+            this.state.state_connections_list,
+            (c: Connection_t) => c.connection_uuid === connection.connection_uuid
+        );
+        if (conn) {
             this.setState(
                 {
-                    hostname: connection.hostname,
-                    port: connection.port,
-                    username: connection.username,
-                    credentials: !!connection.username,
-                    brokerPath: connection.brokerPath,
-                    protocol: connection.protocol,
-                    topics: connection.topics
+                    connection_uuid: conn.connection_uuid,
+                    connection_name: conn.connection_name,
+                    connection_hostname: conn.connection_hostname,
+                    connection_port: conn.connection_port,
+                    connection_use_credentials: conn.connection_use_credentials,
+                    connection_username: conn.connection_username,
+                    connection_password: conn.connection_password,
+                    connection_brokerPath: conn.connection_brokerPath,
+                    connection_protocol: conn.connection_protocol,
+                    connection_topics: conn.connection_topics
                 },
                 cb
             );
@@ -435,41 +526,40 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     private deleteConnection: DeleteConnectionMethod = connection => () => {
-        const connections = [...this.state.connections].filter((conn: Connection_t) => {
-            return connection.uuid !== conn.uuid;
-        });
-        this.setState({ connections });
+        const connections = _.filter(
+            this.state.state_connections_list,
+            (c: Connection_t) => connection.connection_uuid !== c.connection_uuid
+        );
+        this.setState({ state_connections_list: connections });
         ls.set(LSKEY_CONNECTIONS, connections);
     };
 
     render = () => {
+        console.clear();
+        console.log(JSON.stringify(this.state, null, 4));
         return (
             <div style={outer_frame}>
                 {this.modal_settings()}
-                {this.modal_topics()}
-                <Modal
-                    onOk={this.close_modal_createConnection}
-                    onCancel={this.close_modal_createConnection}
-                    visible={this.state.modal_create_connection}
-                >
-                    {this.modal_createConnection()}
-                </Modal>
+                {this.modal_createConnection()}
                 <Row gutter={50}>
                     <Col span={10}>
                         <RecentConnections
-                            running={this.state.running}
                             start={this.start}
                             stop={this.stop}
-                            open_modal_createConnection={this.open_modal_createConnection}
-                            close_modal_createConnection={this.close_modal_createConnection}
-                            open_modal_settings={this.open_modal_settings}
-                            connections={this.state.connections}
-                            deleteConnection={this.deleteConnection}
+                            running={this.state.state_client_running}
+                            connections={this.state.state_connections_list}
                             selectConnection={this.selectConnection}
+                            deleteConnection={this.deleteConnection}
+                            open_modal_connection={this.open_modal_createConnection}
+                            close_modal_connection={this.close_modal_createConnection}
+                            open_modal_settings={this.open_modal_settings}
                         />
                     </Col>
                     <Col span={14}>
-                        <OutputDisplay running={this.state.running} messages={this.state.messages} />
+                        <OutputDisplay
+                            running={this.state.state_client_running}
+                            messages={this.state.state_messages_list}
+                        />
                     </Col>
                 </Row>
             </div>

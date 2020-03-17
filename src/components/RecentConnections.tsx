@@ -9,8 +9,8 @@ export interface RecentConnectionsProps {
     selectConnection: SelectConnectionMethod;
     deleteConnection: DeleteConnectionMethod;
     open_modal_settings: () => void;
-    open_modal_createConnection: () => void;
-    close_modal_createConnection: () => void;
+    open_modal_connection: () => void;
+    close_modal_connection: () => void;
     start: () => void;
     stop: () => void;
     connections: Connection_t[];
@@ -20,39 +20,43 @@ export interface RecentConnectionsProps {
 export class RecentConnections extends React.Component<RecentConnectionsProps> {
     render() {
         const recentConnectionsColumns = [
-            { title: "Hostname", dataIndex: "hostname", render: fallbackNone },
-            { title: "Port", dataIndex: "port", render: fallbackNone },
-            { title: "Username", dataIndex: "username", render: fallbackNone },
-            { title: "Path", dataIndex: "brokerPath", render: fallbackNone },
+            { title: "Hostname", dataIndex: "connection_hostname", render: fallbackNone },
+            { title: "Port", dataIndex: "connection_port", render: fallbackNone },
+            { title: "Username", dataIndex: "connection_username", render: fallbackNone },
+            { title: "Path", dataIndex: "connection_brokerPath", render: fallbackNone },
+            {
+                title: "Topics",
+                dataIndex: "connection_topics",
+                render: o => {
+                    const topics = Object.keys(o).join(", ");
+                    return topics.length ? topics : fallbackNone();
+                }
+            },
             {
                 render: (record: Connection_t) => {
                     return (
-                        <>
-                            <Button
-                                disabled={this.props.running}
-                                onClick={this.props.selectConnection(record, this.props.start)}
-                                type={"primary"}
-                            >
-                                <i className={"fa fa-play"} />
-                            </Button>
-                        </>
+                        <Button
+                            disabled={this.props.running}
+                            onClick={this.props.selectConnection(record, this.props.start)}
+                            type={"primary"}
+                        >
+                            <i className={"fa fa-play"} />
+                        </Button>
                     );
                 }
             },
             {
                 render: record => {
                     return (
-                        <>
-                            <Button
-                                onClick={() => {
-                                    this.props.selectConnection(record)();
-                                    this.props.open_modal_createConnection();
-                                }}
-                                type={"primary"}
-                            >
-                                <i className={"fa fa-edit"} />
-                            </Button>
-                        </>
+                        <Button
+                            onClick={() => {
+                                this.props.selectConnection(record)();
+                                this.props.open_modal_connection();
+                            }}
+                            type={"primary"}
+                        >
+                            <i className={"fa fa-edit"} />
+                        </Button>
                     );
                 }
             },
@@ -71,9 +75,9 @@ export class RecentConnections extends React.Component<RecentConnectionsProps> {
                 <h2> Recent Connections </h2>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <div>
-                        <Button style={buttonStyle} onClick={this.props.open_modal_createConnection} type={"primary"}>
-                            <i className={"fa fa-edit"} />
-                            &nbsp; Connection
+                        <Button style={buttonStyle} onClick={this.props.open_modal_connection} type={"primary"}>
+                            <i className={"fa fa-plus"} />
+                            &nbsp; New
                         </Button>
                         {this.props.running ? (
                             <Button type={"danger"} onClick={this.props.stop}>
@@ -94,7 +98,7 @@ export class RecentConnections extends React.Component<RecentConnectionsProps> {
                     </div>
                 </div>
                 <Table
-                    rowKey={"uuid"}
+                    rowKey={"connection_uuid"}
                     size={"small"}
                     columns={recentConnectionsColumns}
                     dataSource={this.props.connections}
