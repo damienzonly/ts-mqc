@@ -9,12 +9,13 @@ import { ButtonProps } from "antd/lib/button";
 export interface RecentConnectionsProps {
     selectConnection: SelectConnectionMethod;
     deleteConnection: DeleteConnectionMethod;
-    open_modal_settings: () => void;
-    open_modal_connection: () => void;
-    close_modal_connection: () => void;
+    onClick_new: VoidFunction;
+    open_modal_settings: VoidFunction;
+    open_modal_connection: VoidFunction;
+    close_modal_connection: VoidFunction;
     clearMessagesFunction: VoidFunction;
-    start: () => void;
-    stop: () => void;
+    start: VoidFunction;
+    stop: VoidFunction;
     connections: Connection_t[];
     running: boolean;
 }
@@ -62,6 +63,7 @@ export class RecentConnections extends React.Component<RecentConnectionsProps> {
 
     render() {
         const recentConnectionsColumns = [
+            { title: "Connection Name", dataIndex: "connection_name", render: fallbackNone },
             { title: "Hostname", dataIndex: "connection_hostname", render: fallbackNone },
             { title: "Port", dataIndex: "connection_port", render: fallbackNone },
             { title: "Username", dataIndex: "connection_username", render: fallbackNone },
@@ -74,7 +76,7 @@ export class RecentConnections extends React.Component<RecentConnectionsProps> {
 
         const buttonProps_new: ButtonProps = {
             style: buttonStyle,
-            onClick: this.props.open_modal_connection,
+            onClick: this.props.onClick_new,
             type: "primary",
         }
 

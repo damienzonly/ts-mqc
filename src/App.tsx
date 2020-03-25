@@ -1,5 +1,5 @@
 import React from "react";
-import mqtt, { MqttClient, IClientOptions, OnMessageCallback } from "mqtt";
+import mqtt, { MqttClient, OnMessageCallback } from "mqtt";
 import { message, Switch, Row, Col, Modal } from "antd";
 import validator from "validator";
 import "antd/dist/antd.css";
@@ -56,7 +56,6 @@ export default class App extends React.Component<any, IMqcState> {
         connection_username: "",
         connection_password: "",
         connection_brokerPath: "",
-        connection_protocol: "",
         connection_topics: {}
     };
 
@@ -72,7 +71,6 @@ export default class App extends React.Component<any, IMqcState> {
             connection_username: "",
             connection_password: "",
             connection_brokerPath: "",
-            connection_protocol: "",
             connection_topics: {}
         });
     };
@@ -113,8 +111,8 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     private _clearMessages = () => {
-        this.setState({ state_messages_list: [] })
-    }
+        this.setState({ state_messages_list: [] });
+    };
 
     private _saveAll = () => {
         this._saveSettings();
@@ -233,13 +231,15 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     private initializeClient = () => {
-        const opts: IClientOptions = {};
-        if (this.state.connection_use_credentials) {
-            opts.username = this.state.connection_username;
-            opts.password = this.state.connection_password;
-        }
-        const uri = ` ws://${this.state.connection_hostname}:${this.state.connection_port}${this.state.connection_brokerPath}`;
-        this.client = mqtt.connect(uri, opts);
+        const use_credentials = this.state.connection_use_credentials;
+        const username = this.state.connection_username;
+        const password = this.state.connection_password;
+        const host = this.state.connection_hostname;
+        const port = this.state.connection_port;
+        const path = this.state.connection_brokerPath || "/mqtt";
+        const credentials = use_credentials ? `${username}:${password}@` : "";
+        const uri = ` ws://${credentials}${host}:${port}${path}`;
+        this.client = mqtt.connect(uri);
         this.client
             .on("message", (topic, message, packet) => {
                 // todo: add json flag configuration to avoid parsing when unnecessary
@@ -295,9 +295,8 @@ export default class App extends React.Component<any, IMqcState> {
 
     private open_modal_createConnectionAndResetStateConnection = () => {
         this.open_modal_createConnection();
-        this.setState({ state_modal_create_connection: true });
+        this._resetStateConnection();
     };
-
 
     private close_modal_createConnectionAndResetStateConnection = () => {
         this.close_modal_createConnection();
@@ -324,7 +323,7 @@ export default class App extends React.Component<any, IMqcState> {
                     visible={this.state.state_modal_settings}
                     onOk={() => {
                         this.close_modal_settings();
-                        this._saveSettings()
+                        this._saveSettings();
                     }}
                     onCancel={this.close_modal_settings}
                     checked={this.state.settings_parse_json}
@@ -435,7 +434,6 @@ export default class App extends React.Component<any, IMqcState> {
             connection_username: this.state.connection_username,
             connection_password: this.state.connection_password,
             connection_brokerPath: this.state.connection_brokerPath,
-            connection_protocol: this.state.connection_protocol,
             connection_topics: this.state.connection_topics
         };
     };
@@ -517,7 +515,6 @@ export default class App extends React.Component<any, IMqcState> {
                     connection_username: conn.connection_username,
                     connection_password: conn.connection_password,
                     connection_brokerPath: conn.connection_brokerPath,
-                    connection_protocol: conn.connection_protocol,
                     connection_topics: conn.connection_topics
                 },
                 cb
@@ -535,8 +532,6 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     render = () => {
-        console.clear();
-        console.log(JSON.stringify(this.state, null, 4));
         return (
             <div style={outer_frame}>
                 {this.modal_settings()}
@@ -551,6 +546,7 @@ export default class App extends React.Component<any, IMqcState> {
                             connections={this.state.state_connections_list}
                             selectConnection={this.selectConnection}
                             deleteConnection={this.deleteConnection}
+                            onClick_new={this.open_modal_createConnectionAndResetStateConnection}
                             open_modal_connection={this.open_modal_createConnection}
                             close_modal_connection={this.close_modal_createConnection}
                             open_modal_settings={this.open_modal_settings}
