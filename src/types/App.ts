@@ -22,7 +22,6 @@ export type Connection_t = {
     connection_username: string;
     connection_password: string;
     connection_brokerPath: string;
-    connection_protocol: string;
     connection_topics: { [key: string]: Topics_t };
 };
 

@@ -56,7 +56,6 @@ export default class App extends React.Component<any, IMqcState> {
         connection_username: "",
         connection_password: "",
         connection_brokerPath: "",
-        connection_protocol: "",
         connection_topics: {}
     };
 
@@ -72,7 +71,6 @@ export default class App extends React.Component<any, IMqcState> {
             connection_username: "",
             connection_password: "",
             connection_brokerPath: "",
-            connection_protocol: "",
             connection_topics: {}
         });
     };
@@ -297,7 +295,7 @@ export default class App extends React.Component<any, IMqcState> {
 
     private open_modal_createConnectionAndResetStateConnection = () => {
         this.open_modal_createConnection();
-        this.setState({ state_modal_create_connection: true });
+        this._resetStateConnection();
     };
 
     private close_modal_createConnectionAndResetStateConnection = () => {
@@ -436,7 +434,6 @@ export default class App extends React.Component<any, IMqcState> {
             connection_username: this.state.connection_username,
             connection_password: this.state.connection_password,
             connection_brokerPath: this.state.connection_brokerPath,
-            connection_protocol: this.state.connection_protocol,
             connection_topics: this.state.connection_topics
         };
     };
@@ -518,7 +515,6 @@ export default class App extends React.Component<any, IMqcState> {
                     connection_username: conn.connection_username,
                     connection_password: conn.connection_password,
                     connection_brokerPath: conn.connection_brokerPath,
-                    connection_protocol: conn.connection_protocol,
                     connection_topics: conn.connection_topics
                 },
                 cb
@@ -550,6 +546,7 @@ export default class App extends React.Component<any, IMqcState> {
                             connections={this.state.state_connections_list}
                             selectConnection={this.selectConnection}
                             deleteConnection={this.deleteConnection}
+                            onClick_new={this.open_modal_createConnectionAndResetStateConnection}
                             open_modal_connection={this.open_modal_createConnection}
                             close_modal_connection={this.close_modal_createConnection}
                             open_modal_settings={this.open_modal_settings}
