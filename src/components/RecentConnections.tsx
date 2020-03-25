@@ -62,6 +62,7 @@ export class RecentConnections extends React.Component<RecentConnectionsProps> {
 
     render() {
         const recentConnectionsColumns = [
+            { title: "Connection Name", dataIndex: "connection_name", render: fallbackNone },
             { title: "Hostname", dataIndex: "connection_hostname", render: fallbackNone },
             { title: "Port", dataIndex: "connection_port", render: fallbackNone },
             { title: "Username", dataIndex: "connection_username", render: fallbackNone },
