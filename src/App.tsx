@@ -1,5 +1,5 @@
 import React from "react";
-import mqtt, { MqttClient, IClientOptions, OnMessageCallback } from "mqtt";
+import mqtt, { MqttClient, OnMessageCallback } from "mqtt";
 import { message, Switch, Row, Col, Modal } from "antd";
 import validator from "validator";
 import "antd/dist/antd.css";
