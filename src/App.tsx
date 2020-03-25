@@ -113,8 +113,8 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     private _clearMessages = () => {
-        this.setState({ state_messages_list: [] })
-    }
+        this.setState({ state_messages_list: [] });
+    };
 
     private _saveAll = () => {
         this._saveSettings();
@@ -233,13 +233,15 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     private initializeClient = () => {
-        const opts: IClientOptions = {};
-        if (this.state.connection_use_credentials) {
-            opts.username = this.state.connection_username;
-            opts.password = this.state.connection_password;
-        }
-        const uri = ` ws://${this.state.connection_hostname}:${this.state.connection_port}${this.state.connection_brokerPath}`;
-        this.client = mqtt.connect(uri, opts);
+        const use_credentials = this.state.connection_use_credentials;
+        const username = this.state.connection_username;
+        const password = this.state.connection_password;
+        const host = this.state.connection_hostname;
+        const port = this.state.connection_port;
+        const path = this.state.connection_brokerPath || "/mqtt";
+        const credentials = use_credentials ? `${username}:${password}@` : "";
+        const uri = ` ws://${credentials}${host}:${port}${path}`;
+        this.client = mqtt.connect(uri);
         this.client
             .on("message", (topic, message, packet) => {
                 // todo: add json flag configuration to avoid parsing when unnecessary
@@ -298,7 +300,6 @@ export default class App extends React.Component<any, IMqcState> {
         this.setState({ state_modal_create_connection: true });
     };
 
-
     private close_modal_createConnectionAndResetStateConnection = () => {
         this.close_modal_createConnection();
         this._resetStateConnection();
@@ -324,7 +325,7 @@ export default class App extends React.Component<any, IMqcState> {
                     visible={this.state.state_modal_settings}
                     onOk={() => {
                         this.close_modal_settings();
-                        this._saveSettings()
+                        this._saveSettings();
                     }}
                     onCancel={this.close_modal_settings}
                     checked={this.state.settings_parse_json}
@@ -535,8 +536,6 @@ export default class App extends React.Component<any, IMqcState> {
     };
 
     render = () => {
-        console.clear();
-        console.log(JSON.stringify(this.state, null, 4));
         return (
             <div style={outer_frame}>
                 {this.modal_settings()}
